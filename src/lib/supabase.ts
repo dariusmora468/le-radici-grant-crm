@@ -39,6 +39,68 @@ export const EFFORT_LEVELS = ['Low', 'Medium', 'High', 'Very High'] as const
 export const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'] as const
 export const WINDOW_STATUSES = ['Not yet open', 'Open', 'Closing soon', 'Closed', 'Rolling', 'Unknown'] as const
 
+export const ENTITY_TYPES = [
+  'Societa Agricola (Srl)',
+  'Societa Agricola (Sas)',
+  'Societa Agricola (Snc)',
+  'Impresa Agricola Individuale',
+  'Cooperativa Agricola',
+  'Srl',
+  'Sas',
+  'Snc',
+  'Ditta Individuale',
+  'Associazione',
+  'Other',
+] as const
+
+export const ENTITY_STATUSES = [
+  'Active and registered',
+  'To be established',
+  'In formation',
+  'To be acquired',
+] as const
+
+export const SECTORS = [
+  'Agriculture',
+  'Agritourism',
+  'Hospitality & Agritourism',
+  'Hospitality',
+  'Wellness',
+  'Food & Beverage',
+  'Cultural Heritage',
+  'Education & Training',
+  'Renewable Energy',
+  'Rural Tourism',
+  'Viticulture',
+  'Olive Production',
+  'Forestry',
+  'Organic Farming',
+  'Digital & Technology',
+  'Other',
+] as const
+
+export const OBJECTIVES = [
+  'Building renovation',
+  'New construction',
+  'Agritourism establishment',
+  'Agricultural production (olive oil, wine)',
+  'Agricultural production (other)',
+  'Wellness facilities',
+  'Heritage preservation',
+  'Sustainable/regenerative farming',
+  'Rural tourism development',
+  'Energy efficiency',
+  'Renewable energy installation',
+  'Water management',
+  'Digital transformation',
+  'Training and education',
+  'Job creation',
+  'Landscape restoration',
+  'Accessibility improvements',
+] as const
+
+export const URGENCY_LEVELS = ['Critical', 'High', 'Medium', 'Low'] as const
+
 export interface Grant {
   id: string
   name: string
@@ -138,4 +200,37 @@ export interface Project {
   description: string | null
   country: string | null
   region: string | null
+  summary: string | null
+  website: string | null
+  entity_type: string | null
+  entity_status: string | null
+  municipality: string | null
+  young_farmer_eligible: boolean
+  female_farmer_eligible: boolean
+  ateco_codes: string | null
+  primary_sector: string | null
+  secondary_sectors: string[] | null
+  heritage_classification: string | null
+  landscape_protections: string | null
+  land_area_hectares: number | null
+  building_area_sqm: number | null
+  land_use_types: string[] | null
+  total_investment_estimate: number | null
+  own_capital_available: number | null
+  co_financing_capacity_pct: number | null
+  annual_revenue: number | null
+  funding_range_min: number | null
+  funding_range_max: number | null
+  project_start_date: string | null
+  expected_completion_date: string | null
+  urgency: string | null
+  team_size: number | null
+  key_qualifications: string | null
+  experience_summary: string | null
+  objectives: string[] | null
+  sustainability_goals: string | null
+  raw_description: string | null
+  onboarding_complete: boolean
+  created_at?: string | null
+  updated_at?: string | null
 }
