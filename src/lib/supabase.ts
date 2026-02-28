@@ -129,6 +129,9 @@ export interface Grant {
   effort_level: string | null
   notes: string | null
   research_notes: string | null
+  why_relevant: string | null
+  risks: string | null
+  who_is_it_for: string | null
   created_at: string | null
   updated_at: string | null
   category?: GrantCategory | null
