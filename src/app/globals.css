@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-body text-walnut-900 bg-cream-50 antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-terracotta-600 text-white font-body font-semibold text-sm rounded-lg
+           hover:bg-terracotta-700 active:bg-terracotta-800 transition-colors duration-150;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-cream-200 text-walnut-800 font-body font-semibold text-sm rounded-lg
+           hover:bg-cream-300 active:bg-cream-400 transition-colors duration-150 border border-cream-300;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-4 py-2 text-walnut-600 font-body font-medium text-sm rounded-lg
+           hover:bg-cream-100 active:bg-cream-200 transition-colors duration-150;
+  }
+  .card {
+    @apply bg-white rounded-xl border border-cream-200 shadow-sm;
+  }
+  .card-hover {
+    @apply card hover:shadow-md hover:border-cream-300 transition-all duration-200;
+  }
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-cream-50 border border-cream-300 rounded-lg font-body text-sm text-walnut-900
+           placeholder:text-walnut-400 focus:outline-none focus:ring-2 focus:ring-terracotta-400 focus:border-terracotta-400
+           transition-colors duration-150;
+  }
+  .select-field {
+    @apply w-full px-4 py-2.5 bg-cream-50 border border-cream-300 rounded-lg font-body text-sm text-walnut-900
+           focus:outline-none focus:ring-2 focus:ring-terracotta-400 focus:border-terracotta-400
+           transition-colors duration-150;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold font-body;
+  }
+  .page-title {
+    @apply text-3xl font-display font-bold text-walnut-900 tracking-tight;
+  }
+  .page-subtitle {
+    @apply mt-1 text-walnut-500 font-body text-base;
+  }
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-walnut-200 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-walnut-300; }
