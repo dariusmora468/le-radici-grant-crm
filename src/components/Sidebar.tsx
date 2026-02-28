@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
 import { clearAuth } from '@/lib/auth'
 
 const nav = [
@@ -17,36 +16,79 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-white border-r border-cream-200 flex flex-col z-30">
-      <div className="p-5 border-b border-cream-100">
+    <aside
+      className="fixed left-0 top-0 bottom-0 w-56 flex flex-col z-30"
+      style={{
+        background: 'rgba(255, 255, 255, 0.55)',
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.3)',
+        boxShadow: '4px 0 30px rgba(0, 0, 0, 0.03)',
+      }}
+    >
+      {/* Logo */}
+      <div className="p-5 pb-4">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-terracotta-100 rounded-xl flex items-center justify-center">
-            <svg className="w-5 h-5 text-terracotta-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3" />
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.15)',
+            }}
+          >
+            <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
             </svg>
           </div>
           <div>
-            <div className="font-display font-bold text-sm text-walnut-900">Le Radici</div>
-            <div className="font-body text-[11px] text-walnut-400 tracking-wide uppercase">Grant CRM</div>
+            <div className="font-semibold text-sm text-slate-900 tracking-tight">GrantFlow</div>
+            <div className="text-[11px] text-slate-400 tracking-wide">Funding Intelligence</div>
           </div>
         </Link>
       </div>
 
-      <nav className="flex-1 p-3 space-y-0.5">
+      {/* Divider */}
+      <div className="mx-4 h-px" style={{ background: 'rgba(0, 0, 0, 0.06)' }} />
+
+      {/* Navigation */}
+      <nav className="flex-1 p-3 pt-3 space-y-0.5">
         {nav.map(({ href, label, icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
               key={href}
               href={href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150',
+              className={[
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
                 active
-                  ? 'bg-terracotta-50 text-terracotta-700'
-                  : 'text-walnut-600 hover:bg-cream-100 hover:text-walnut-800'
-              )}
+                  ? 'text-blue-700'
+                  : 'text-slate-500 hover:text-slate-700',
+              ].filter(Boolean).join(' ')}
+              style={active ? {
+                background: 'rgba(59, 130, 246, 0.08)',
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.5)',
+              } : undefined}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.background = 'rgba(255, 255, 255, 0.5)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.background = 'transparent'
+                }
+              }}
             >
-              <svg className={cn('w-[18px] h-[18px]', active ? 'text-terracotta-500' : 'text-walnut-400')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <svg
+                className={[
+                  'w-[18px] h-[18px]',
+                  active ? 'text-blue-500' : 'text-slate-400',
+                ].join(' ')}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
               </svg>
               {label}
@@ -55,12 +97,16 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-3 border-t border-cream-100">
+      {/* Footer */}
+      <div className="p-3">
+        <div className="mx-1 mb-2 h-px" style={{ background: 'rgba(0, 0, 0, 0.06)' }} />
         <button
           onClick={() => { clearAuth(); window.location.href = '/' }}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-walnut-500 hover:bg-cream-100 hover:text-walnut-700 transition-colors w-full"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-slate-600 transition-all duration-200 w-full"
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255, 255, 255, 0.5)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
         >
-          <svg className="w-[18px] h-[18px] text-walnut-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
           </svg>
           Sign out

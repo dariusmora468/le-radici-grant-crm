@@ -5,7 +5,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Pipeline stages in order
 export const PIPELINE_STAGES = [
   'Discovered',
   'Researching',
@@ -22,16 +21,16 @@ export const PIPELINE_STAGES = [
 export type PipelineStage = typeof PIPELINE_STAGES[number]
 
 export const STAGE_COLORS: Record<string, string> = {
-  'Discovered': 'bg-cream-200 text-walnut-800',
-  'Researching': 'bg-olive-100 text-olive-800',
-  'Serious Consideration': 'bg-olive-200 text-olive-900',
-  'Preparing Application': 'bg-terracotta-100 text-terracotta-800',
-  'Submitted': 'bg-terracotta-200 text-terracotta-900',
-  'Under Review': 'bg-cream-300 text-walnut-800',
-  'Awarded': 'bg-olive-400 text-white',
-  'Rejected': 'bg-walnut-200 text-walnut-700',
-  'Follow-up': 'bg-cream-400 text-walnut-900',
-  'Archived': 'bg-walnut-100 text-walnut-500',
+  'Discovered': 'bg-slate-100 text-slate-600',
+  'Researching': 'bg-blue-50 text-blue-600',
+  'Serious Consideration': 'bg-blue-100 text-blue-700',
+  'Preparing Application': 'bg-indigo-50 text-indigo-600',
+  'Submitted': 'bg-violet-100 text-violet-700',
+  'Under Review': 'bg-amber-50 text-amber-700',
+  'Awarded': 'bg-emerald-100 text-emerald-700',
+  'Rejected': 'bg-rose-50 text-rose-600',
+  'Follow-up': 'bg-orange-50 text-orange-600',
+  'Archived': 'bg-slate-50 text-slate-400',
 }
 
 export const FUNDING_SOURCES = ['EU', 'National', 'Regional', 'Local', 'Private', 'Mixed'] as const
@@ -40,7 +39,6 @@ export const EFFORT_LEVELS = ['Low', 'Medium', 'High', 'Very High'] as const
 export const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'] as const
 export const WINDOW_STATUSES = ['Not yet open', 'Open', 'Closing soon', 'Closed', 'Rolling', 'Unknown'] as const
 
-// Types
 export interface Grant {
   id: string
   name: string
