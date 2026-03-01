@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import { supabase, PIPELINE_STAGES, STAGE_COLORS } from '@/lib/supabase'
 import type { GrantApplication, Grant } from '@/lib/supabase'
@@ -297,66 +298,86 @@ function PipelineCard({
   onDragEnd: (e: React.DragEvent) => void
 }) {
   const [showMenu, setShowMenu] = useState(false)
+  const wasDragged = useRef(false)
+  const router = useRouter()
+
+  function handleCardDragStart(e: React.DragEvent) {
+    wasDragged.current = false
+    onDragStart(e)
+    setTimeout(() => { wasDragged.current = true }, 100)
+  }
+
+  function handleCardDragEnd(e: React.DragEvent) {
+    onDragEnd(e)
+    setTimeout(() => { wasDragged.current = false }, 50)
+  }
+
+  function handleCardClick(e: React.MouseEvent) {
+    if (wasDragged.current) { e.preventDefault(); return }
+    if ((e.target as HTMLElement).closest('button')) return
+    router.push(`/pipeline/${app.id}`)
+  }
+
+  const cardStyle = {
+    background: 'rgba(255, 255, 255, 0.72)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255, 255, 255, 0.4)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
+  }
 
   return (
     <div
       className={cn('relative group', isDragging && 'opacity-40')}
       draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      onDragStart={handleCardDragStart}
+      onDragEnd={handleCardDragEnd}
     >
-      <Link href={`/pipeline/${app.id}`}>
-        <div
-          className="p-3.5 rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing"
-          style={{
-            background: 'rgba(255, 255, 255, 0.72)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.4)',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
-            ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
-            ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-          }}
-        >
-          {/* Drag handle dots */}
-          <div className="absolute top-2.5 left-1 grid grid-cols-2 gap-[2px] opacity-0 group-hover:opacity-30 transition-opacity">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="w-[3px] h-[3px] rounded-full bg-slate-500" />
-            ))}
-          </div>
-
-          <p className="text-sm font-medium text-slate-800 mb-1.5 line-clamp-2 pl-3">
-            {app.grant?.name || 'Unnamed Grant'}
-          </p>
-          {app.grant?.category && (
-            <span className="badge bg-blue-50 text-blue-600 text-[10px] mb-2 ml-3">{(app.grant.category as any).name}</span>
-          )}
-          <div className="flex items-center justify-between mt-2 pl-3">
-            {app.target_amount ? (
-              <span className="text-xs font-medium text-slate-600">{formatCurrency(app.target_amount)}</span>
-            ) : (
-              <span className="text-xs text-slate-300">No target</span>
-            )}
-            {app.priority && (
-              <span className={cn(
-                'text-[10px] font-semibold px-1.5 py-0.5 rounded',
-                app.priority === 'Critical' ? 'bg-rose-50 text-rose-600' :
-                app.priority === 'High' ? 'bg-amber-50 text-amber-600' :
-                app.priority === 'Medium' ? 'bg-blue-50 text-blue-500' :
-                'bg-slate-50 text-slate-400'
-              )}>
-                {app.priority}
-              </span>
-            )}
-          </div>
+      <div
+        onClick={handleCardClick}
+        className="p-3.5 rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing"
+        style={cardStyle}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+          ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
+          ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+        }}
+      >
+        {/* Drag handle dots */}
+        <div className="absolute top-2.5 left-1 grid grid-cols-2 gap-[2px] opacity-0 group-hover:opacity-30 transition-opacity">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="w-[3px] h-[3px] rounded-full bg-slate-500" />
+          ))}
         </div>
-      </Link>
+
+        <p className="text-sm font-medium text-slate-800 mb-1.5 line-clamp-2 pl-3">
+          {app.grant?.name || 'Unnamed Grant'}
+        </p>
+        {app.grant?.category && (
+          <span className="badge bg-blue-50 text-blue-600 text-[10px] mb-2 ml-3">{(app.grant.category as any).name}</span>
+        )}
+        <div className="flex items-center justify-between mt-2 pl-3">
+          {app.target_amount ? (
+            <span className="text-xs font-medium text-slate-600">{formatCurrency(app.target_amount)}</span>
+          ) : (
+            <span className="text-xs text-slate-300">No target</span>
+          )}
+          {app.priority && (
+            <span className={cn(
+              'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+              app.priority === 'Critical' ? 'bg-rose-50 text-rose-600' :
+              app.priority === 'High' ? 'bg-amber-50 text-amber-600' :
+              app.priority === 'Medium' ? 'bg-blue-50 text-blue-500' :
+              'bg-slate-50 text-slate-400'
+            )}>
+              {app.priority}
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="absolute top-2 right-2">
         <button
