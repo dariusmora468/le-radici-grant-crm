@@ -51,37 +51,57 @@ Today's date is ${new Date().toISOString().split('T')[0]}.
 
 Respond with ONLY a JSON object (no markdown, no backticks, no preamble):
 {
-  "summary": "2-3 sentence assessment of this grant for this project",
+  "summary": "2-3 sentence assessment of this grant for this specific project. Be concrete about fit.",
   "probability_of_success": "High" | "Medium" | "Low",
-  "probability_reasoning": "2-3 sentences explaining the probability assessment honestly",
+  "probability_reasoning": "2-3 sentences explaining the probability assessment with specific reasons.",
   "estimated_amount_min": <number in EUR>,
   "estimated_amount_max": <number in EUR>,
-  "required_documents": [
+  "next_steps": [
     {
-      "document": "Document name",
-      "description": "What this document needs to contain",
-      "status": "likely_ready" | "needs_preparation" | "missing" | "blocked",
+      "step": "Specific, actionable task (start with a verb)",
+      "detail": "2-3 sentences explaining exactly what to do, who to contact, or what to prepare",
+      "deadline": "Suggested deadline (e.g., 'Within 1 week', 'Before March 15')",
       "effort": "Low" | "Medium" | "High"
     }
   ],
   "blockers": [
     {
-      "blocker": "What is blocking",
+      "title": "Short title of the blocker or warning",
+      "description": "What the issue is and why it matters",
       "severity": "critical" | "warning" | "info",
-      "resolution": "How to resolve it",
-      "resolution_time": "Estimated time"
+      "resolution": "Specific steps to resolve this",
+      "resolution_time": "Estimated time to resolve",
+      "affected_area": "What part of the application this blocks (e.g., 'Eligibility', 'Documentation', 'Timeline')"
     }
   ],
-  "next_steps": [
+  "required_documents": [
     {
-      "step": "Specific action to take",
-      "why": "Why this matters",
-      "deadline": "Suggested deadline"
+      "document": "Official document name",
+      "description": "What this document must contain and its purpose in the application",
+      "status": "likely_ready" | "needs_preparation" | "missing" | "blocked",
+      "effort": "Low" | "Medium" | "High",
+      "how_to_prepare": "Step-by-step guide to prepare this document",
+      "ai_can_help": "Specific way AI can assist (e.g., 'Can draft the business plan narrative', 'Can create financial projections template', 'Can translate documents to Italian'). Be specific about what AI can actually generate vs what requires human input or official stamps."
     }
   ],
-  "risks": "1-2 sentences on what could go wrong",
-  "tips": "1-2 sentences of insider advice for this specific grant type"
-}`
+  "improvements": [
+    {
+      "change": "Specific change the project could make to increase success chances",
+      "impact": "High" | "Medium" | "Low",
+      "impact_detail": "How this change specifically improves the application (e.g., 'Moves probability from Medium to High', 'Unlocks additional 20% funding bonus', 'Satisfies a preferred criterion worth 15 points')",
+      "effort_to_implement": "What it would take to make this change",
+      "category": "Entity" | "Team" | "Project Scope" | "Documentation" | "Timeline" | "Financial" | "Sustainability"
+    }
+  ],
+  "insider_tip": "One powerful, specific piece of insider advice about this grant type that most applicants miss. This should be something a consultant would charge money to tell you."
+}
+
+IMPORTANT RULES:
+- next_steps should be 4-6 concrete actions, ordered by priority. These become a to-do list.
+- blockers should include ALL issues (critical problems AND minor warnings), sorted by severity (critical first, then warning, then info). Merge what would be "risks" and "warnings" into this one list.
+- required_documents should list every document needed, with honest status assessment based on the project profile. The ai_can_help field is crucial: be specific about what an AI assistant can draft or template.
+- improvements should list 3-5 specific changes. Think creatively about what the project could adjust (entity structure, team composition, project scope, sustainability features, timeline) to better match grant criteria. Each must have a concrete impact assessment.
+- insider_tip should be genuinely valuable, not generic advice. Think about what experienced consultants know about this specific grant program.`
 
     const userPrompt = buildUserPrompt(grant, project)
 
@@ -97,7 +117,7 @@ Respond with ONLY a JSON object (no markdown, no backticks, no preamble):
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
+          max_tokens: 6000,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
         }),

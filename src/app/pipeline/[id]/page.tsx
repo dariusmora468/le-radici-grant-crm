@@ -317,7 +317,7 @@ export default function ApplicationDetailPage() {
                   </div>
 
                   {strategyExpanded && (
-                    <div className="p-5 space-y-5">
+                    <div className="p-5 space-y-6">
                       {/* Summary */}
                       <div>
                         <p className="text-sm text-slate-700 leading-relaxed">{strategy.summary}</p>
@@ -326,7 +326,7 @@ export default function ApplicationDetailPage() {
 
                       {/* Amount estimate */}
                       {(strategy.estimated_amount_min || strategy.estimated_amount_max) && (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50/50">
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50/50 border border-emerald-100">
                           <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
                           </svg>
@@ -336,85 +336,93 @@ export default function ApplicationDetailPage() {
                         </div>
                       )}
 
-                      {/* Critical blockers alert */}
-                      {strategy.blockers?.some(b => b.severity === 'critical') && (
-                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-100">
-                          <p className="text-xs font-semibold text-rose-700 mb-2 flex items-center gap-1.5">
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                            </svg>
-                            Critical Blockers
-                          </p>
-                          {strategy.blockers.filter(b => b.severity === 'critical').map((b, i) => (
-                            <div key={i} className="text-xs text-rose-600 mb-1.5 last:mb-0">
-                              <span className="font-medium">{b.blocker}:</span> {b.resolution} ({b.resolution_time})
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Required Documents */}
-                      {strategy.required_documents && strategy.required_documents.length > 0 && (
-                        <div>
-                          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Required Documents</h3>
-                          <div className="space-y-1.5">
-                            {strategy.required_documents.map((doc, i) => (
-                              <div key={i} className="flex items-start gap-2 p-2 rounded-lg hover:bg-white/40 transition-colors">
-                                <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5 shrink-0',
-                                  doc.status === 'likely_ready' ? 'bg-emerald-400' :
-                                  doc.status === 'needs_preparation' ? 'bg-amber-400' :
-                                  'bg-rose-400'
-                                )} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm text-slate-700 font-medium">{doc.document}</span>
-                                    <span className={cn('text-[10px] uppercase tracking-wide', DOC_STATUS_COLORS[doc.status] || 'text-slate-400')}>
-                                      {doc.status.replace('_', ' ')}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-slate-400 mt-0.5">{doc.description}</p>
-                                </div>
-                                <span className="text-[10px] text-slate-300 uppercase shrink-0">{doc.effort}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* All blockers (non-critical) */}
-                      {strategy.blockers?.filter(b => b.severity !== 'critical').length > 0 && (
-                        <div>
-                          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Warnings & Notes</h3>
-                          <div className="space-y-1.5">
-                            {strategy.blockers.filter(b => b.severity !== 'critical').map((b, i) => (
-                              <div key={i} className="flex items-start gap-2 p-2 rounded-lg">
-                                <span className={cn('text-[10px] px-1.5 py-0.5 rounded border shrink-0 mt-0.5', SEVERITY_COLORS[b.severity] || SEVERITY_COLORS.info)}>
-                                  {b.severity}
-                                </span>
-                                <div>
-                                  <p className="text-sm text-slate-600">{b.blocker}</p>
-                                  <p className="text-xs text-slate-400 mt-0.5">{b.resolution} ({b.resolution_time})</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Next Steps */}
+                      {/* Next Steps (interactive checklist) */}
                       {strategy.next_steps && strategy.next_steps.length > 0 && (
                         <div>
-                          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Next Steps</h3>
-                          <div className="space-y-2">
+                          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Action Plan</h3>
+                          <div className="space-y-1">
                             {strategy.next_steps.map((step, i) => (
-                              <div key={i} className="flex items-start gap-3 p-2">
-                                <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                                  {i + 1}
-                                </span>
-                                <div>
-                                  <p className="text-sm text-slate-700">{step.step}</p>
-                                  <p className="text-xs text-slate-400 mt-0.5">{step.why}</p>
-                                  {step.deadline && <p className="text-[10px] text-blue-500 mt-0.5">Deadline: {step.deadline}</p>}
+                              <div key={i} className="group">
+                                <button
+                                  onClick={() => {
+                                    const updated = { ...strategy }
+                                    updated.next_steps = [...strategy.next_steps]
+                                    updated.next_steps[i] = { ...step, done: !step.done }
+                                    setStrategy(updated)
+                                  }}
+                                  className={cn(
+                                    'w-full flex items-start gap-3 p-3 rounded-xl text-left transition-all',
+                                    step.done ? 'bg-emerald-50/30' : 'hover:bg-white/60'
+                                  )}
+                                >
+                                  <div className={cn(
+                                    'w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-all',
+                                    step.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 group-hover:border-blue-400'
+                                  )}>
+                                    {step.done && (
+                                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn('text-sm font-medium', step.done ? 'text-slate-400 line-through' : 'text-slate-700')}>
+                                      {step.step}
+                                    </p>
+                                    {step.detail && (
+                                      <p className={cn('text-xs mt-1 leading-relaxed', step.done ? 'text-slate-300' : 'text-slate-400')}>
+                                        {step.detail}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-3 mt-1.5">
+                                      {step.deadline && (
+                                        <span className="text-[10px] text-blue-500 flex items-center gap-1">
+                                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                          </svg>
+                                          {step.deadline}
+                                        </span>
+                                      )}
+                                      {step.effort && (
+                                        <span className={cn('text-[10px] uppercase tracking-wide',
+                                          step.effort === 'Low' ? 'text-emerald-500' :
+                                          step.effort === 'Medium' ? 'text-amber-500' : 'text-rose-500'
+                                        )}>
+                                          {step.effort} effort
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Blockers & Warnings (merged, sorted by severity) */}
+                      {strategy.blockers && strategy.blockers.length > 0 && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Blockers & Warnings</h3>
+                          <div className="space-y-2">
+                            {[...strategy.blockers]
+                              .sort((a, b) => {
+                                const order = { critical: 0, warning: 1, info: 2 }
+                                return (order[a.severity] || 2) - (order[b.severity] || 2)
+                              })
+                              .map((b, i) => (
+                              <div key={i} className={cn('p-3 rounded-xl border', SEVERITY_COLORS[b.severity] || SEVERITY_COLORS.info)}>
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <p className="text-sm font-medium">{b.title || (b as any).blocker || 'Issue'}</p>
+                                  <span className="text-[10px] uppercase tracking-wide opacity-70 shrink-0">{b.affected_area}</span>
+                                </div>
+                                <p className="text-xs opacity-80 mb-2">{b.description || ''}</p>
+                                <div className="flex items-center gap-1.5 text-[10px] opacity-70">
+                                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17l-5.1-3.18M15 10.5c0 1.4-.5 2.5-1.5 3.6L12 15.5l-1.5-1.4C9.5 13 9 11.9 9 10.5 9 8 11 6 13.5 6S18 8 18 10.5z" />
+                                  </svg>
+                                  <span>{b.resolution}</span>
+                                  {b.resolution_time && <span>({b.resolution_time})</span>}
                                 </div>
                               </div>
                             ))}
@@ -422,21 +430,101 @@ export default function ApplicationDetailPage() {
                         </div>
                       )}
 
-                      {/* Tips & Risks */}
-                      {(strategy.tips || strategy.risks) && (
-                        <div className="grid grid-cols-2 gap-3">
-                          {strategy.tips && (
-                            <div className="p-3 rounded-xl bg-blue-50/50">
-                              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider mb-1">Insider Tip</p>
-                              <p className="text-xs text-slate-600">{strategy.tips}</p>
-                            </div>
-                          )}
-                          {strategy.risks && (
-                            <div className="p-3 rounded-xl bg-amber-50/50">
-                              <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider mb-1">Risks</p>
-                              <p className="text-xs text-slate-600">{strategy.risks}</p>
-                            </div>
-                          )}
+                      {/* Required Documents (expandable) */}
+                      {strategy.required_documents && strategy.required_documents.length > 0 && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Required Documents</h3>
+                          <div className="space-y-1.5">
+                            {strategy.required_documents.map((doc, i) => (
+                              <details key={i} className="group rounded-xl overflow-hidden">
+                                <summary className="flex items-center gap-3 p-3 cursor-pointer hover:bg-white/60 transition-colors list-none">
+                                  <div className={cn('w-2 h-2 rounded-full shrink-0',
+                                    doc.status === 'likely_ready' ? 'bg-emerald-400' :
+                                    doc.status === 'needs_preparation' ? 'bg-amber-400' :
+                                    'bg-rose-400'
+                                  )} />
+                                  <span className="text-sm text-slate-700 font-medium flex-1">{doc.document}</span>
+                                  <span className={cn('text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full',
+                                    doc.status === 'likely_ready' ? 'bg-emerald-50 text-emerald-600' :
+                                    doc.status === 'needs_preparation' ? 'bg-amber-50 text-amber-600' :
+                                    'bg-rose-50 text-rose-600'
+                                  )}>
+                                    {doc.status.replace(/_/g, ' ')}
+                                  </span>
+                                  <svg className="w-3.5 h-3.5 text-slate-300 group-open:rotate-90 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                  </svg>
+                                </summary>
+                                <div className="px-3 pb-3 pt-1 ml-5 space-y-2">
+                                  <p className="text-xs text-slate-500 leading-relaxed">{doc.description}</p>
+                                  {doc.how_to_prepare && (
+                                    <div className="p-2.5 rounded-lg bg-slate-50/80">
+                                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">How to Prepare</p>
+                                      <p className="text-xs text-slate-600 leading-relaxed">{doc.how_to_prepare}</p>
+                                    </div>
+                                  )}
+                                  {doc.ai_can_help && (
+                                    <div className="p-2.5 rounded-lg bg-violet-50/60 border border-violet-100">
+                                      <p className="text-[10px] font-semibold text-violet-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                        </svg>
+                                        How AI Can Help
+                                      </p>
+                                      <p className="text-xs text-violet-700 leading-relaxed">{doc.ai_can_help}</p>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                                    <span>Effort: <span className={cn('font-medium',
+                                      doc.effort === 'Low' ? 'text-emerald-500' :
+                                      doc.effort === 'Medium' ? 'text-amber-500' : 'text-rose-500'
+                                    )}>{doc.effort}</span></span>
+                                  </div>
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Improve Your Chances */}
+                      {strategy.improvements && strategy.improvements.length > 0 && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Improve Your Chances</h3>
+                          <div className="space-y-2">
+                            {strategy.improvements.map((imp, i) => (
+                              <div key={i} className="p-3 rounded-xl border border-blue-100 bg-blue-50/30">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <p className="text-sm font-medium text-slate-700">{imp.change}</p>
+                                  <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0',
+                                    imp.impact === 'High' ? 'bg-emerald-100 text-emerald-700' :
+                                    imp.impact === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-slate-100 text-slate-500'
+                                  )}>
+                                    {imp.impact} impact
+                                  </span>
+                                </div>
+                                <p className="text-xs text-blue-700/70 mb-1.5">{imp.impact_detail}</p>
+                                <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                                  {imp.category && <span className="px-1.5 py-0.5 rounded bg-white/60">{imp.category}</span>}
+                                  <span>{imp.effort_to_implement}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Insider Tip */}
+                      {(strategy.insider_tip || strategy.tips) && (
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-violet-50 to-blue-50 border border-violet-100">
+                          <p className="text-xs font-semibold text-violet-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+                            </svg>
+                            Insider Tip
+                          </p>
+                          <p className="text-sm text-slate-700 leading-relaxed">{strategy.insider_tip || strategy.tips}</p>
                         </div>
                       )}
                     </div>

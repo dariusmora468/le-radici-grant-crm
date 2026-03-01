@@ -260,23 +260,38 @@ export interface GrantStrategy {
   probability_reasoning: string
   estimated_amount_min: number
   estimated_amount_max: number
+  next_steps: {
+    step: string
+    detail: string
+    deadline: string
+    effort: 'Low' | 'Medium' | 'High'
+    done?: boolean
+  }[]
+  blockers: {
+    title: string
+    description: string
+    severity: 'critical' | 'warning' | 'info'
+    resolution: string
+    resolution_time: string
+    affected_area: string
+  }[]
   required_documents: {
     document: string
     description: string
     status: 'likely_ready' | 'needs_preparation' | 'missing' | 'blocked'
     effort: 'Low' | 'Medium' | 'High'
+    how_to_prepare: string
+    ai_can_help: string
   }[]
-  blockers: {
-    blocker: string
-    severity: 'critical' | 'warning' | 'info'
-    resolution: string
-    resolution_time: string
+  improvements: {
+    change: string
+    impact: 'High' | 'Medium' | 'Low'
+    impact_detail: string
+    effort_to_implement: string
+    category: string
   }[]
-  next_steps: {
-    step: string
-    why: string
-    deadline: string
-  }[]
-  risks: string
-  tips: string
+  insider_tip: string
+  // Legacy fields (old strategies may have these)
+  risks?: string
+  tips?: string
 }
