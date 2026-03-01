@@ -241,6 +241,7 @@ export interface Project {
 export interface Strategy {
   id: string
   project_id: string
+  grant_application_id: string | null
   executive_summary: string | null
   grants_ranked: any[]
   blockers: any[]
@@ -251,4 +252,31 @@ export interface Strategy {
   generated_at: string | null
   created_at: string | null
   updated_at: string | null
+}
+
+export interface GrantStrategy {
+  summary: string
+  probability_of_success: 'High' | 'Medium' | 'Low'
+  probability_reasoning: string
+  estimated_amount_min: number
+  estimated_amount_max: number
+  required_documents: {
+    document: string
+    description: string
+    status: 'likely_ready' | 'needs_preparation' | 'missing' | 'blocked'
+    effort: 'Low' | 'Medium' | 'High'
+  }[]
+  blockers: {
+    blocker: string
+    severity: 'critical' | 'warning' | 'info'
+    resolution: string
+    resolution_time: string
+  }[]
+  next_steps: {
+    step: string
+    why: string
+    deadline: string
+  }[]
+  risks: string
+  tips: string
 }
