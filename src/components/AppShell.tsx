@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import AuthGate from '@/components/AuthGate'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import Sidebar from '@/components/Sidebar'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -19,7 +20,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="bg-app">
         <Sidebar />
         <main className="ml-56 p-8 relative z-10 min-h-screen pb-16">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
         {version && (
           <div className="fixed bottom-0 right-0 px-3 py-1 text-[10px] text-slate-300 z-50">

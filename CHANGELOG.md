@@ -10,6 +10,9 @@
 - **Auto-seed documents from strategy.** When clicking "Apply" on a grant that has a strategy, the Document Vault is pre-populated with all required documents including effort level, preparation notes, and AI assistance hints. No more empty documents tab.
 - **PDF export.** Review tab's "Print / Save as PDF" button opens a print-optimized page with proposal narrative, budget plan, and document checklist. Works as browser print (Cmd+P to save as PDF).
 - **Visible error messages for all AI operations.** Question generation, draft generation, and consultant matching now show a dismissible error banner instead of silently failing to console.
+- **React Error Boundary.** Wraps all page content via AppShell. Catches unhandled JS errors and shows a friendly "Something went wrong" screen with reload button instead of white screen.
+- **Database performance indexes.** 13 indexes across all major tables (grants, pipeline, applications, questions, documents, activity log, strategies). Zero risk, prevents slow queries as data grows.
+- **6 top grants added to pipeline.** Bonus Restauro, Soprintendenza Heritage, Cultural Heritage Conservation, EAFRD, ISMEA Generazione Terra, ISMEA Investe - all set to "Researching" stage.
 
 ---
 
