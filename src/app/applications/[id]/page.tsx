@@ -59,6 +59,7 @@ export default function ApplicationWorkspacePage() {
   const [matchedConsultants, setMatchedConsultants] = useState<any[]>([])
   const [consultantsLoading, setConsultantsLoading] = useState(false)
   const [expandedConsultant, setExpandedConsultant] = useState<number | null>(null)
+  const [aiError, setAiError] = useState('')
 
   const fetchData = useCallback(async () => {
     const id = params.id as string
@@ -109,6 +110,7 @@ export default function ApplicationWorkspacePage() {
     if (!section || !app?.grant_application?.grant) return
 
     setQuestionsLoading(true)
+    setAiError('')
 
     try {
       const res = await apiFetch('/api/application-questions', {
@@ -145,6 +147,7 @@ export default function ApplicationWorkspacePage() {
       fetchData()
     } catch (err: any) {
       console.error('Failed to generate questions:', err)
+      setAiError(err.message || 'Failed to generate questions. Please try again.')
     }
 
     setQuestionsLoading(false)
@@ -193,6 +196,7 @@ export default function ApplicationWorkspacePage() {
     if (!section || !app?.grant_application?.grant) return
 
     setQuestionsLoading(true)
+    setAiError('')
 
     try {
       const res = await apiFetch('/api/application-draft', {
@@ -226,6 +230,7 @@ export default function ApplicationWorkspacePage() {
       fetchData()
     } catch (err: any) {
       console.error('Failed to generate draft:', err)
+      setAiError(err.message || 'Failed to generate draft. Please try again.')
     }
 
     setQuestionsLoading(false)
@@ -255,6 +260,7 @@ export default function ApplicationWorkspacePage() {
       setMatchedConsultants(Array.isArray(data) ? data : data.consultants || [])
     } catch (err: any) {
       console.error('Consultant matching failed:', err)
+      setAiError(err.message || 'Failed to find consultants. Please try again.')
     }
     setConsultantsLoading(false)
   }
@@ -330,7 +336,7 @@ export default function ApplicationWorkspacePage() {
   const currentSection = sections.find(s => s.section_type === activeSection)
   const answeredCount = questions.filter(q => q.is_answered).length
   const totalQuestions = questions.length
-  const canGenerateDraft = answeredCount >= 3 && activeSection === 'proposal'
+  const canGenerateDraft = answeredCount >= 3 && (activeSection === 'proposal' || activeSection === 'budget')
 
   return (
     <AppShell>
@@ -428,6 +434,22 @@ export default function ApplicationWorkspacePage() {
 
         {/* Active section content */}
         <div className="card p-6">
+          {/* Error banner */}
+          {aiError && (
+            <div className="mb-4 p-3 rounded-xl border border-rose-200 bg-rose-50/80 flex items-start gap-3">
+              <svg className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm text-rose-700">{aiError}</p>
+              </div>
+              <button onClick={() => setAiError('')} className="text-rose-400 hover:text-rose-600 shrink-0">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
           {activeSection === 'proposal' && (
             <div>
               <div className="flex items-center justify-between mb-6">
@@ -646,7 +668,35 @@ export default function ApplicationWorkspacePage() {
                       </svg>
                       More Questions
                     </button>
+
+                    {canGenerateDraft && (
+                      <button
+                        onClick={generateDraft}
+                        disabled={questionsLoading}
+                        className="btn-primary text-sm inline-flex items-center gap-2"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                        </svg>
+                        Generate Budget Plan
+                      </button>
+                    )}
                   </div>
+
+                  {/* AI Budget Draft */}
+                  {currentSection?.ai_draft && (
+                    <div className="mt-6 p-6 rounded-xl border border-amber-100" style={{ background: 'rgba(245,158,11,0.03)' }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                        </svg>
+                        <h3 className="text-sm font-semibold text-amber-700">AI-Generated Budget Plan</h3>
+                      </div>
+                      <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap">
+                        {currentSection.ai_draft}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1008,10 +1058,90 @@ export default function ApplicationWorkspacePage() {
                 )}
               </div>
 
-              {/* Export button */}
-              <div className="p-4 rounded-xl border border-dashed border-slate-200 text-center">
-                <p className="text-xs text-slate-400 mb-2">PDF Export coming soon</p>
-                <p className="text-[10px] text-slate-400">Complete your proposal, budget, and document sections, then export a full application package to share with your consultant.</p>
+              {/* Export */}
+              <div className="p-4 rounded-xl border border-slate-200" style={{ background: 'rgba(0,0,0,0.01)' }}>
+                <h3 className="text-sm font-semibold text-slate-800 mb-2">Export Application</h3>
+                <p className="text-xs text-slate-500 mb-4">Generate a printable summary of your proposal, budget plan, and document checklist to share with your consultant or submit.</p>
+                <button
+                  onClick={() => {
+                    // Build printable content
+                    const proposalSection = sections.find(s => s.section_type === 'proposal')
+                    const budgetSection = sections.find(s => s.section_type === 'budget')
+                    const printWindow = window.open('', '_blank')
+                    if (!printWindow) return
+
+                    printWindow.document.write(`<!DOCTYPE html><html><head>
+                      <title>${grant?.name || 'Grant Application'} - Application Package</title>
+                      <style>
+                        body { font-family: 'Inter', -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1e293b; line-height: 1.6; }
+                        h1 { font-size: 22px; margin-bottom: 4px; }
+                        h2 { font-size: 16px; color: #3b82f6; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-top: 32px; }
+                        h3 { font-size: 14px; margin-top: 20px; }
+                        .meta { font-size: 12px; color: #64748b; margin-bottom: 24px; }
+                        .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+                        .badge-green { background: #ecfdf5; color: #059669; }
+                        .badge-amber { background: #fffbeb; color: #d97706; }
+                        .badge-slate { background: #f1f5f9; color: #64748b; }
+                        .draft { white-space: pre-wrap; font-size: 13px; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
+                        .doc-list { list-style: none; padding: 0; }
+                        .doc-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+                        .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+                        .dot-green { background: #10b981; }
+                        .dot-amber { background: #f59e0b; }
+                        .dot-slate { background: #cbd5e1; }
+                        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; }
+                        @media print { body { padding: 20px; } }
+                      </style>
+                    </head><body>
+                      <h1>${grant?.name || 'Grant Application'}</h1>
+                      <div class="meta">
+                        ${grant?.funding_source ? `<span class="badge badge-green">${grant.funding_source}</span> ` : ''}
+                        ${grant?.max_amount ? `Up to €${Number(grant.max_amount).toLocaleString()}` : ''}
+                        <br/>Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} via GrantFlow
+                      </div>
+
+                      ${proposalSection?.ai_draft ? `
+                        <h2>Proposal Narrative</h2>
+                        <div class="draft">${proposalSection.ai_draft}</div>
+                      ` : '<h2>Proposal Narrative</h2><p style="color:#94a3b8;font-size:13px;">Not yet generated. Complete the Proposal Builder questions first.</p>'}
+
+                      ${budgetSection?.ai_draft ? `
+                        <h2>Budget Plan</h2>
+                        <div class="draft">${budgetSection.ai_draft}</div>
+                      ` : '<h2>Budget Plan</h2><p style="color:#94a3b8;font-size:13px;">Not yet generated. Complete the Budget Planner questions first.</p>'}
+
+                      <h2>Document Checklist</h2>
+                      ${documents.length > 0 ? `
+                        <ul class="doc-list">
+                          ${documents.map(d => `
+                            <li class="doc-item">
+                              <span class="dot ${d.status === 'ready' ? 'dot-green' : d.status === 'in_progress' ? 'dot-amber' : 'dot-slate'}"></span>
+                              <span style="flex:1">${d.document_name}</span>
+                              <span class="badge ${d.status === 'ready' ? 'badge-green' : d.status === 'in_progress' ? 'badge-amber' : 'badge-slate'}">${d.status === 'ready' ? 'Ready' : d.status === 'in_progress' ? 'In Progress' : 'Not Started'}</span>
+                            </li>
+                          `).join('')}
+                        </ul>
+                        <p style="font-size:12px;color:#64748b;margin-top:8px;">
+                          ${documents.filter(d => d.status === 'ready').length} of ${documents.length} documents ready
+                        </p>
+                      ` : '<p style="color:#94a3b8;font-size:13px;">No documents tracked yet.</p>'}
+
+                      <div class="footer">
+                        Application progress: ${app.overall_progress}% complete
+                        ${app.grant_application?.consultant ? ` | Consultant: ${app.grant_application.consultant.name}` : ''}
+                      </div>
+                    </body></html>`)
+
+                    printWindow.document.close()
+                    setTimeout(() => printWindow.print(), 500)
+                  }}
+                  className="btn-primary text-sm inline-flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+                  </svg>
+                  Print / Save as PDF
+                </button>
               </div>
             </div>
           )}

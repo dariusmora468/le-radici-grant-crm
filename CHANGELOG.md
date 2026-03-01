@@ -1,5 +1,18 @@
 # GrantFlow Changelog
 
+## [2026-03-01] Apply with AI - End-to-End Polish
+
+### Fixed
+- **Budget tab now generates drafts.** Previously the "Generate Draft" button only appeared in the Proposal tab due to a hardcoded check. Budget tab now has its own "Generate Budget Plan" button with amber-themed draft display.
+- **Budget draft uses financial-specific prompt.** Previously both proposal and budget drafts used the same narrative prompt. The API now returns structured budget plans with cost categories, co-financing breakdowns, cash flow timelines, and budget justification.
+
+### Added
+- **Auto-seed documents from strategy.** When clicking "Apply" on a grant that has a strategy, the Document Vault is pre-populated with all required documents including effort level, preparation notes, and AI assistance hints. No more empty documents tab.
+- **PDF export.** Review tab's "Print / Save as PDF" button opens a print-optimized page with proposal narrative, budget plan, and document checklist. Works as browser print (Cmd+P to save as PDF).
+- **Visible error messages for all AI operations.** Question generation, draft generation, and consultant matching now show a dismissible error banner instead of silently failing to console.
+
+---
+
 ## [2026-03-01] Security Hardening + Documentation
 
 ### Added

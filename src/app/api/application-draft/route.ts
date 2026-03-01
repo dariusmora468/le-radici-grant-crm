@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
     const projects = await projectRes.json()
     const project = projects?.[0] || {}
 
-    const systemPrompt = `You are an expert grant writer who has helped hundreds of projects secure EU and Italian government funding. Write a compelling grant proposal narrative based on the applicant's answers to guided questions.
+    const sectionPrompts: Record<string, string> = {
+      proposal: `You are an expert grant writer who has helped hundreds of projects secure EU and Italian government funding. Write a compelling grant proposal narrative based on the applicant's answers to guided questions.
 
 WRITING GUIDELINES:
 - Write in a formal but persuasive tone appropriate for grant evaluators
@@ -47,7 +48,33 @@ STRUCTURE:
 6. Team Qualifications
 7. Budget Justification Summary
 
-Write the complete draft narrative now.`
+Write the complete draft narrative now.`,
+
+      budget: `You are an expert grant financial planner who has prepared budgets for hundreds of EU and Italian government funding applications. Create a detailed, realistic budget plan based on the applicant's answers.
+
+BUDGET GUIDELINES:
+- Structure costs into standard EU grant categories (infrastructure, equipment, personnel, professional services, operating costs, contingency)
+- Show both eligible costs and co-financing breakdown
+- Include clear unit costs where possible (per sqm, per item, per month)
+- Flag which costs are eligible vs. ineligible for this specific grant
+- Note VAT treatment (typically not eligible for agricultural entities)
+- Include a timeline of expenditures by quarter/year
+- Be conservative with estimates (grant evaluators penalize unrealistic budgets)
+- Use the language appropriate for the grant
+
+STRUCTURE:
+1. Budget Summary Table (total by category)
+2. Detailed Cost Breakdown by Category
+   - Each line: description, quantity, unit cost, total, eligibility note
+3. Co-financing Plan (own funds, bank debt, other grants)
+4. Cash Flow Timeline (when money is needed vs. when reimbursement arrives)
+5. Budget Justification Notes (why each major cost is necessary and realistic)
+6. Risk Factors (cost overruns, delays, currency)
+
+Create the complete budget plan now.`,
+    }
+
+    const systemPrompt = sectionPrompts[section_type] || sectionPrompts.proposal
 
     const answersFormatted = answers.map((a: any) => `Q: ${a.question}\nA: ${a.answer}`).join('\n\n')
 

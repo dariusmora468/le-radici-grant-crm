@@ -251,6 +251,32 @@ export default function GrantDetailPage() {
         { application_id: newApp.id, section_type: 'review', title: 'Review & Export' },
       ])
 
+      // Step 4b: Seed documents from strategy if one exists
+      const { data: strategyData } = await supabase
+        .from('strategies')
+        .select('grants_ranked')
+        .eq('grant_application_id', pipelineId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (strategyData?.grants_ranked?.[0]?.required_documents) {
+        const docs = strategyData.grants_ranked[0].required_documents
+        const docInserts = docs.map((doc: any, i: number) => ({
+          application_id: newApp.id,
+          document_name: doc.document || doc.name || 'Untitled Document',
+          description: doc.description || null,
+          status: doc.status === 'likely_ready' ? 'ready' : 'not_started',
+          notes: doc.how_to_prepare || null,
+          effort: doc.effort || null,
+          ai_can_help: doc.ai_can_help || null,
+          order_index: i,
+        }))
+        if (docInserts.length > 0) {
+          await supabase.from('application_documents').insert(docInserts)
+        }
+      }
+
       // Step 5: Update pipeline stage
       await supabase.from('grant_applications').update({
         stage: 'Preparing Application',
