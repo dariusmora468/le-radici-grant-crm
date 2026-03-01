@@ -8,6 +8,7 @@ import { supabase, PIPELINE_STAGES, STAGE_COLORS, PRIORITY_LEVELS } from '@/lib/
 import type { GrantApplication, Grant, Consultant, ActivityLog, GrantStrategy } from '@/lib/supabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api-fetch'
+import AIProgressBar from '@/components/AIProgressBar'
 
 type FullApplication = GrantApplication & {
   grant: (Grant & { category: { name: string } | null }) | null
@@ -635,10 +636,8 @@ export default function ApplicationDetailPage() {
                 </div>
               ) : strategyLoading ? (
                 /* Loading state */
-                <div className="p-8 text-center">
-                  <div className="w-10 h-10 mx-auto mb-4 border-3 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  <p className="text-sm font-medium text-slate-700 mb-1">Analyzing this grant...</p>
-                  <p className="text-xs text-slate-400">Checking eligibility, documents, and blockers (15-30 seconds)</p>
+                <div className="p-4">
+                  <AIProgressBar label="Analyzing this grant..." />
                 </div>
               ) : strategy ? (
                 /* Results */

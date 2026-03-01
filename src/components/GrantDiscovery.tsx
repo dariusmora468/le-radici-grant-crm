@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import type { Project } from '@/lib/supabase'
 import { formatCurrency, cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api-fetch'
+import AIProgressBar from '@/components/AIProgressBar'
 
 interface DiscoveredGrant {
   name: string
@@ -187,12 +188,8 @@ export default function GrantDiscovery({
   // Loading state
   if (discovering) {
     return (
-      <div className="card p-12 text-center mb-6">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4" style={{ background: 'rgba(59,130,246,0.08)' }}>
-          <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-        </div>
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Searching for Grants...</h3>
-        <p className="text-sm text-slate-400">Analyzing your project profile against EU, national, and regional funding databases. This takes 15-30 seconds.</p>
+      <div className="card p-6 mb-6">
+        <AIProgressBar label="Discovering grants for your project..." />
       </div>
     )
   }
