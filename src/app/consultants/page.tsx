@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import { supabase } from '@/lib/supabase'
 import type { Consultant } from '@/lib/supabase'
@@ -17,7 +18,12 @@ const emptyForm = {
   notes: '',
 }
 
-export default function ConsultantsPage() {
+function ConsultantsContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const grantApplicationId = searchParams.get('grant_application_id')
+  const grantName = searchParams.get('grant_name')
+
   const [consultants, setConsultants] = useState<Consultant[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -27,6 +33,11 @@ export default function ConsultantsPage() {
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  // AI search state
+  const [aiSearching, setAiSearching] = useState(false)
+  const [aiSearchDone, setAiSearchDone] = useState(false)
+  const [aiResults, setAiResults] = useState<any[]>([])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('consultants').select('*').order('name')
@@ -35,6 +46,106 @@ export default function ConsultantsPage() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Auto-search for consultants when arriving with a grant filter
+  useEffect(() => {
+    if (grantApplicationId && grantName && !aiSearchDone && !aiSearching && consultants.length >= 0 && !loading) {
+      runAiSearch()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grantApplicationId, grantName, loading])
+
+  async function runAiSearch() {
+    setAiSearching(true)
+    setAiResults([])
+
+    try {
+      // Fetch project profile and grant info
+      const [projectRes, appRes] = await Promise.all([
+        supabase.from('projects').select('*').limit(1).single(),
+        grantApplicationId
+          ? supabase.from('grant_applications').select('*, grant:grants(*)').eq('id', grantApplicationId).single()
+          : Promise.resolve({ data: null }),
+      ])
+
+      const grant = appRes.data?.grant || { name: grantName }
+      const project = projectRes.data || { name: 'Agricultural estate conversion', region: 'Tuscany', country: 'Italy' }
+
+      const res = await fetch('/api/find-consultants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant, project }),
+      })
+
+      let data
+      try {
+        const text = await res.text()
+        data = JSON.parse(text)
+      } catch {
+        throw new Error('Invalid response from consultant search')
+      }
+
+      if (data.error) throw new Error(data.error)
+
+      const found = Array.isArray(data) ? data : data.consultants || []
+      setAiResults(found)
+    } catch (err: any) {
+      console.error('AI consultant search failed:', err)
+    }
+
+    setAiSearching(false)
+    setAiSearchDone(true)
+  }
+
+  async function addAiResult(result: any) {
+    setSaving(true)
+    const payload = {
+      name: result.name || 'Unknown',
+      organization: result.organization || null,
+      email: result.email || null,
+      phone: result.phone || null,
+      specialization: result.specialization || null,
+      region: result.region || null,
+      website: result.website || null,
+      notes: result.notes || null,
+    }
+
+    const { data } = await supabase.from('consultants').insert(payload).select().single()
+
+    if (data && grantApplicationId) {
+      // Assign to the grant application
+      await supabase.from('grant_applications').update({ consultant_id: data.id }).eq('id', grantApplicationId)
+      await supabase.from('grant_activity_log').insert({
+        application_id: grantApplicationId,
+        action: 'Consultant assigned',
+        details: `Added ${data.name}${data.organization ? ` (${data.organization})` : ''}`,
+        performed_by: 'User',
+      })
+    }
+
+    // Remove from AI results
+    setAiResults(prev => prev.filter(r => r.name !== result.name))
+    setSaving(false)
+    fetchData()
+  }
+
+  async function assignExistingConsultant(consultantId: string, consultantName: string) {
+    if (!grantApplicationId) return
+    await supabase.from('grant_applications').update({ consultant_id: consultantId }).eq('id', grantApplicationId)
+    await supabase.from('grant_activity_log').insert({
+      application_id: grantApplicationId,
+      action: 'Consultant assigned',
+      details: `Added ${consultantName}`,
+      performed_by: 'User',
+    })
+    router.push(`/pipeline/${grantApplicationId}`)
+  }
+
+  function clearFilter() {
+    router.push('/consultants')
+    setAiResults([])
+    setAiSearchDone(false)
+  }
 
   function startEdit(c: Consultant) {
     setForm({
@@ -76,11 +187,27 @@ export default function ConsultantsPage() {
       website: form.website.trim() || null,
       notes: form.notes.trim() || null,
     }
+
+    let newId: string | null = null
     if (editingId) {
       await supabase.from('consultants').update(payload).eq('id', editingId)
+      newId = editingId
     } else {
-      await supabase.from('consultants').insert(payload)
+      const { data } = await supabase.from('consultants').insert(payload).select().single()
+      newId = data?.id || null
     }
+
+    // If adding while filtered, assign to application
+    if (!editingId && newId && grantApplicationId) {
+      await supabase.from('grant_applications').update({ consultant_id: newId }).eq('id', grantApplicationId)
+      await supabase.from('grant_activity_log').insert({
+        application_id: grantApplicationId,
+        action: 'Consultant assigned',
+        details: `Added ${form.name.trim()}`,
+        performed_by: 'User',
+      })
+    }
+
     setSaving(false)
     cancelForm()
     fetchData()
@@ -107,6 +234,29 @@ export default function ConsultantsPage() {
   return (
     <AppShell>
       <div className="animate-fade-in">
+        {/* Grant filter banner */}
+        {grantApplicationId && grantName && (
+          <div className="mb-4 p-3 rounded-xl flex items-center justify-between" style={{
+            background: 'rgba(59, 130, 246, 0.06)',
+            border: '1px solid rgba(59, 130, 246, 0.15)',
+          }}>
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+              </svg>
+              <span className="text-xs text-blue-700">
+                Finding consultants for: <span className="font-semibold">{decodeURIComponent(grantName)}</span>
+              </span>
+            </div>
+            <button onClick={clearFilter} className="text-xs text-blue-500 hover:text-blue-700 transition-colors flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Clear filter
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -120,6 +270,60 @@ export default function ConsultantsPage() {
             Add Consultant
           </button>
         </div>
+
+        {/* AI Search Results */}
+        {(aiSearching || aiResults.length > 0) && (
+          <div className="card p-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              {aiSearching ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm text-slate-600">Searching for consultants who specialize in this type of grant...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  <span className="text-sm font-medium text-slate-700">AI found {aiResults.length} potential consultant{aiResults.length !== 1 ? 's' : ''}</span>
+                </>
+              )}
+            </div>
+
+            {aiResults.length > 0 && (
+              <div className="space-y-2">
+                {aiResults.map((r, i) => (
+                  <div key={i} className="flex items-start justify-between gap-4 p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.02)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-700">{r.name}</p>
+                      {r.organization && <p className="text-xs text-slate-400">{r.organization}</p>}
+                      <div className="flex items-center gap-2 mt-1">
+                        {r.specialization && <span className="badge bg-blue-50 text-blue-600 text-[10px]">{r.specialization}</span>}
+                        {r.region && <span className="text-[10px] text-slate-400">{r.region}</span>}
+                      </div>
+                      {r.notes && <p className="text-xs text-slate-500 mt-1">{r.notes}</p>}
+                      <div className="flex items-center gap-3 mt-1.5">
+                        {r.website && (
+                          <a href={r.website} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:text-blue-600 truncate">
+                            {r.website.replace(/^https?:\/\//, '')}
+                          </a>
+                        )}
+                        {r.email && <span className="text-[10px] text-slate-400">{r.email}</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => addAiResult(r)}
+                      disabled={saving}
+                      className="btn-primary text-xs shrink-0 disabled:opacity-50"
+                    >
+                      {grantApplicationId ? 'Add & Assign' : 'Add'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Search */}
         {consultants.length > 0 && (
@@ -180,13 +384,13 @@ export default function ConsultantsPage() {
             <div className="flex items-center justify-end gap-2">
               <button onClick={cancelForm} className="btn-ghost text-sm">Cancel</button>
               <button onClick={handleSave} disabled={saving || !form.name.trim()} className="btn-primary disabled:opacity-50">
-                {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Add Consultant'}
+                {saving ? 'Saving...' : editingId ? 'Save Changes' : grantApplicationId ? 'Add & Assign' : 'Add Consultant'}
               </button>
             </div>
           </div>
         )}
 
-        {/* List */}
+        {/* Existing consultants list */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
@@ -210,6 +414,9 @@ export default function ConsultantsPage() {
           </div>
         ) : (
           <div className="space-y-2">
+            {grantApplicationId && filtered.length > 0 && (
+              <p className="text-xs text-slate-400 mb-2 px-1">Your existing consultants. Click "Assign" to link one to this grant.</p>
+            )}
             {filtered.map((c) => {
               const isExpanded = expandedId === c.id
               return (
@@ -236,12 +443,22 @@ export default function ConsultantsPage() {
                           </div>
                         </div>
                       </div>
-                      <svg
-                        className={cn('w-4 h-4 text-slate-300 transition-transform duration-200', isExpanded && 'rotate-180')}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                      </svg>
+                      <div className="flex items-center gap-2">
+                        {grantApplicationId && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); assignExistingConsultant(c.id, c.name) }}
+                            className="btn-secondary text-xs"
+                          >
+                            Assign
+                          </button>
+                        )}
+                        <svg
+                          className={cn('w-4 h-4 text-slate-300 transition-transform duration-200', isExpanded && 'rotate-180')}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
 
@@ -287,5 +504,19 @@ export default function ConsultantsPage() {
         )}
       </div>
     </AppShell>
+  )
+}
+
+export default function ConsultantsPage() {
+  return (
+    <Suspense fallback={
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    }>
+      <ConsultantsContent />
+    </Suspense>
   )
 }

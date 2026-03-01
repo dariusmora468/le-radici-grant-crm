@@ -567,35 +567,55 @@ export default function ApplicationDetailPage() {
             {/* Target amount */}
             <div className="card p-6">
               <h2 className="text-sm font-semibold text-slate-800 mb-3">Target Amount</h2>
-              <input
-                type="number"
-                defaultValue={app.target_amount || ''}
-                onBlur={(e) => updateField('target_amount', e.target.value ? parseFloat(e.target.value) : null)}
-                className="input-field"
-                placeholder="EUR"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">€</span>
+                <input
+                  type="number"
+                  defaultValue={app.target_amount || ''}
+                  onBlur={(e) => updateField('target_amount', e.target.value ? parseFloat(e.target.value) : null)}
+                  className="input-field pl-7"
+                  placeholder="0"
+                />
+              </div>
             </div>
 
             {/* Consultant */}
             <div className="card p-6">
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">Consultant</h2>
-              <select
-                value={app.consultant_id || ''}
-                onChange={(e) => updateField('consultant_id', e.target.value || null)}
-                className="select-field"
-              >
-                <option value="">None assigned</option>
-                {consultants.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.organization ? ` (${c.organization})` : ''}</option>
-                ))}
-              </select>
-              {app.consultant && (
-                <div className="mt-3 p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.02)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-slate-800">Consultant</h2>
+                <Link
+                  href={`/consultants?grant_application_id=${app.id}&grant_name=${encodeURIComponent(app.grant?.name || 'Grant')}`}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                  title="Find consultants for this grant"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                </Link>
+              </div>
+              {app.consultant ? (
+                <div className="p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.02)' }}>
                   <p className="text-sm font-medium text-slate-700">{app.consultant.name}</p>
                   {app.consultant.organization && <p className="text-xs text-slate-400">{app.consultant.organization}</p>}
                   {app.consultant.email && (
                     <a href={`mailto:${app.consultant.email}`} className="text-xs text-blue-500 hover:text-blue-600 mt-1 block">{app.consultant.email}</a>
                   )}
+                  <button
+                    onClick={() => updateField('consultant_id', null)}
+                    className="text-[10px] text-rose-400 hover:text-rose-500 mt-2 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-3">
+                  <p className="text-xs text-slate-400 mb-2">No consultant assigned</p>
+                  <Link
+                    href={`/consultants?grant_application_id=${app.id}&grant_name=${encodeURIComponent(app.grant?.name || 'Grant')}`}
+                    className="text-xs text-blue-500 hover:text-blue-600 transition-colors"
+                  >
+                    Find a consultant for this grant
+                  </Link>
                 </div>
               )}
             </div>
@@ -605,22 +625,16 @@ export default function ApplicationDetailPage() {
               <h2 className="text-sm font-semibold text-slate-800 mb-3">Dates</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Internal Deadline</label>
+                  <label className="block text-xs text-slate-400 mb-1">Submission Deadline</label>
                   <input
                     type="date"
-                    defaultValue={app.internal_deadline || ''}
-                    onBlur={(e) => updateField('internal_deadline', e.target.value || null)}
-                    className="input-field"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Submission Date</label>
-                  <input
-                    type="date"
-                    defaultValue={app.submission_date || ''}
+                    defaultValue={app.submission_date || app.grant?.application_window_closes || ''}
                     onBlur={(e) => updateField('submission_date', e.target.value || null)}
                     className="input-field"
                   />
+                  {!app.submission_date && app.grant?.application_window_closes && (
+                    <p className="text-[10px] text-slate-300 mt-1">Pre-filled from grant deadline</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Expected Response</label>
@@ -631,6 +645,14 @@ export default function ApplicationDetailPage() {
                     className="input-field"
                   />
                 </div>
+                {app.grant?.application_window_opens && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <p className="text-[10px] text-slate-400">
+                      Window: {formatDate(app.grant.application_window_opens)}
+                      {app.grant.application_window_closes ? ` to ${formatDate(app.grant.application_window_closes)}` : ' (open)'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
