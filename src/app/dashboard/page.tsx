@@ -3,98 +3,95 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
-import { supabase, STAGE_COLORS, PIPELINE_STAGES } from '@/lib/supabase'
-import type { Grant, GrantApplication, ActivityLog } from '@/lib/supabase'
-import { formatCurrency, formatDate, daysUntil, cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { cn, formatCurrency } from '@/lib/utils'
 
-interface DashboardData {
-  totalGrants: number
-  inPipeline: number
-  potentialFunding: number
-  submitted: number
-  awarded: number
-  awardedAmount: number
-  applicationsByStage: Record<string, number>
-  recentActivity: ActivityLog[]
-  upcomingDeadlines: { id: string; name: string; deadline: string; daysLeft: number; type: string }[]
-  recentGrants: (Grant & { category?: { name: string } | null })[]
-  topApplications: (GrantApplication & { grant: (Grant & { category?: { name: string } | null }) | null })[]
+type Grant = {
+  id: string
+  name: string
+  name_it: string | null
+  funding_source: string
+  max_amount: number | null
+  relevance_score: number | null
+  window_status: string | null
+  application_window_opens: string | null
+  application_window_closes: string | null
+  effort_level: string | null
+  description: string | null
+  funding_type: string | null
+}
+
+type Blocker = {
+  id: string
+  name: string
+  description: string | null
+  status: 'blocking' | 'in_progress' | 'resolved'
+  grants_blocked: string[] | null
+  unlock_value: string | null
+  time_to_fix: string | null
+  action_needed: string | null
+  owner: string | null
+  resolved_at: string | null
+  sort_order: number
+}
+
+type PipelineApp = {
+  id: string
+  stage: string
+  grant: { name: string; max_amount: number | null } | null
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
+  'Open': { label: 'Open', color: 'text-emerald-600', dot: 'bg-emerald-400' },
+  'Closing soon': { label: 'Closing Soon', color: 'text-amber-600', dot: 'bg-amber-400' },
+  'Not yet open': { label: 'Not Yet Open', color: 'text-blue-500', dot: 'bg-blue-400' },
+  'Rolling': { label: 'Rolling', color: 'text-violet-600', dot: 'bg-violet-400' },
+  'Closed': { label: 'Closed', color: 'text-slate-400', dot: 'bg-slate-300' },
+  'Unknown': { label: 'Unknown', color: 'text-slate-400', dot: 'bg-slate-300' },
+}
+
+function daysUntil(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  const now = new Date()
+  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function formatDeadline(dateStr: string | null): string {
+  if (!dateStr) return 'No deadline'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null)
+  const [grants, setGrants] = useState<Grant[]>([])
+  const [blockers, setBlockers] = useState<Blocker[]>([])
+  const [pipeline, setPipeline] = useState<PipelineApp[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedBlocker, setExpandedBlocker] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
-    setLoading(true)
-
-    const [grantsRes, appsRes, activityRes] = await Promise.all([
-      supabase.from('grants').select('*, category:grant_categories(name)').order('created_at', { ascending: false }),
-      supabase.from('grant_applications').select('*, grant:grants(*, category:grant_categories(name))').order('updated_at', { ascending: false }),
-      supabase.from('grant_activity_log').select('*').order('created_at', { ascending: false }).limit(8),
+    const [grantsRes, blockersRes, pipelineRes] = await Promise.all([
+      supabase.from('grants').select('*').order('relevance_score', { ascending: false }),
+      supabase.from('project_blockers').select('*').order('sort_order'),
+      supabase.from('grant_applications').select('id, stage, grant:grants(name, max_amount)'),
     ])
-
-    const grants = grantsRes.data || []
-    const apps = appsRes.data || []
-    const activity = activityRes.data || []
-
-    const activeStages = ['Discovered', 'Researching', 'Serious Consideration', 'Preparing Application', 'Submitted', 'Under Review']
-    const activeApps = apps.filter((a: any) => activeStages.includes(a.stage))
-    const submittedApps = apps.filter((a: any) => ['Submitted', 'Under Review'].includes(a.stage))
-    const awardedApps = apps.filter((a: any) => a.stage === 'Awarded')
-
-    const potentialFunding = activeApps.reduce((sum: number, a: any) => sum + (a.target_amount || a.grant?.max_amount || 0), 0)
-    const awardedAmount = awardedApps.reduce((sum: number, a: any) => sum + (a.target_amount || 0), 0)
-
-    const applicationsByStage: Record<string, number> = {}
-    PIPELINE_STAGES.forEach((s) => {
-      const count = apps.filter((a: any) => a.stage === s).length
-      if (count > 0) applicationsByStage[s] = count
-    })
-
-    // Upcoming deadlines from grants and applications
-    const deadlines: DashboardData['upcomingDeadlines'] = []
-    grants.forEach((g: any) => {
-      if (g.application_window_closes) {
-        const days = daysUntil(g.application_window_closes)
-        if (days !== null && days > 0 && days <= 90) {
-          deadlines.push({ id: g.id, name: g.name, deadline: g.application_window_closes, daysLeft: days, type: 'grant_window' })
-        }
-      }
-    })
-    apps.forEach((a: any) => {
-      if (a.internal_deadline) {
-        const days = daysUntil(a.internal_deadline)
-        if (days !== null && days > 0 && days <= 90) {
-          deadlines.push({ id: a.id, name: a.grant?.name || 'Application', deadline: a.internal_deadline, daysLeft: days, type: 'internal' })
-        }
-      }
-      if (a.submission_date) {
-        const days = daysUntil(a.submission_date)
-        if (days !== null && days > 0 && days <= 90) {
-          deadlines.push({ id: a.id, name: a.grant?.name || 'Application', deadline: a.submission_date, daysLeft: days, type: 'submission' })
-        }
-      }
-    })
-    deadlines.sort((a, b) => a.daysLeft - b.daysLeft)
-
-    setData({
-      totalGrants: grants.length,
-      inPipeline: activeApps.length,
-      potentialFunding,
-      submitted: submittedApps.length,
-      awarded: awardedApps.length,
-      awardedAmount,
-      applicationsByStage,
-      recentActivity: activity,
-      upcomingDeadlines: deadlines.slice(0, 6),
-      recentGrants: grants.slice(0, 5) as any,
-      topApplications: apps.filter((a: any) => activeStages.includes(a.stage)).slice(0, 5) as any,
-    })
+    if (grantsRes.data) setGrants(grantsRes.data)
+    if (blockersRes.data) setBlockers(blockersRes.data as Blocker[])
+    if (pipelineRes.data) setPipeline(pipelineRes.data as unknown as PipelineApp[])
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  async function updateBlockerStatus(id: string, status: string) {
+    await supabase.from('project_blockers').update({
+      status,
+      resolved_at: status === 'resolved' ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    fetchData()
+  }
 
   if (loading) {
     return (
@@ -106,228 +103,387 @@ export default function DashboardPage() {
     )
   }
 
-  if (!data) return null
+  // Computed stats
+  const openGrants = grants.filter(g => g.window_status === 'Open' || g.window_status === 'Closing soon')
+  const rollingGrants = grants.filter(g => g.window_status === 'Rolling')
+  const closedGrants = grants.filter(g => g.window_status === 'Closed')
+  const notYetOpen = grants.filter(g => g.window_status === 'Not yet open')
+
+  const totalAddressable = grants
+    .filter(g => g.window_status !== 'Closed')
+    .reduce((sum, g) => sum + (g.max_amount || 0), 0)
+
+  const activeBlockers = blockers.filter(b => b.status === 'blocking')
+  const inProgressBlockers = blockers.filter(b => b.status === 'in_progress')
+  const resolvedBlockers = blockers.filter(b => b.status === 'resolved')
+
+  // Deadlines sorted by date
+  const upcomingDeadlines = grants
+    .filter(g => g.application_window_closes && g.window_status !== 'Closed')
+    .map(g => ({ ...g, daysLeft: daysUntil(g.application_window_closes) }))
+    .filter(g => g.daysLeft !== null && g.daysLeft > 0)
+    .sort((a, b) => (a.daysLeft || 999) - (b.daysLeft || 999))
+
+  // Actions: combine blocker actions with deadline-driven actions
+  const urgentActions = [
+    ...activeBlockers.map(b => ({
+      type: 'blocker' as const,
+      priority: b.sort_order,
+      title: b.name,
+      action: b.action_needed || '',
+      owner: b.owner || 'Team',
+      urgency: 'blocker' as const,
+    })),
+    ...upcomingDeadlines
+      .filter(g => (g.daysLeft || 999) <= 90)
+      .map(g => ({
+        type: 'deadline' as const,
+        priority: 100 + (g.daysLeft || 0),
+        title: g.name,
+        action: `Deadline: ${formatDeadline(g.application_window_closes)}. ${g.daysLeft} days remaining.`,
+        owner: 'Team',
+        urgency: (g.daysLeft || 999) <= 30 ? 'critical' as const : 'warning' as const,
+      })),
+  ].sort((a, b) => a.priority - b.priority)
 
   return (
     <AppShell>
-      <div className="animate-fade-in">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="page-title">Dashboard</h1>
-            <p className="page-subtitle">Funding overview and pipeline status</p>
+            <h1 className="page-title">Funding Command Center</h1>
+            <p className="page-subtitle">Live overview of grants, blockers, and next actions</p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/grants/new" className="btn-primary text-sm">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Add Grant
+            <Link href="/grants" className="btn-secondary text-sm">
+              All Grants
+            </Link>
+            <Link href="/pipeline" className="btn-primary text-sm">
+              Pipeline
             </Link>
           </div>
         </div>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <StatCard label="Total Identified" value={data.totalGrants.toString()} sub="grants" color="text-slate-900" />
-          <StatCard label="In Pipeline" value={data.inPipeline.toString()} sub="active" color="text-blue-600" />
-          <StatCard label="Potential Funding" value={formatCurrency(data.potentialFunding)} sub="estimated" color="text-emerald-600" />
-          <StatCard label="Submitted" value={data.submitted.toString()} sub="awaiting review" color="text-violet-600" />
+        {/* ============= SECTION 1: STATS CARDS ============= */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="card p-5">
+            <div className="text-3xl font-bold text-emerald-600">{openGrants.length}</div>
+            <div className="text-sm text-slate-600 font-medium mt-1">Open Now</div>
+            <div className="text-xs text-slate-400 mt-0.5">Ready to apply</div>
+          </div>
+          <div className="card p-5">
+            <div className="text-3xl font-bold text-violet-600">{rollingGrants.length}</div>
+            <div className="text-sm text-slate-600 font-medium mt-1">Rolling</div>
+            <div className="text-xs text-slate-400 mt-0.5">Ongoing programs</div>
+          </div>
+          <div className="card p-5">
+            <div className="text-3xl font-bold text-blue-500">{notYetOpen.length}</div>
+            <div className="text-sm text-slate-600 font-medium mt-1">Upcoming</div>
+            <div className="text-xs text-slate-400 mt-0.5">Not yet open</div>
+          </div>
+          <div className="card p-5">
+            <div className="text-3xl font-bold text-slate-700">{grants.length}</div>
+            <div className="text-sm text-slate-600 font-medium mt-1">Total Tracked</div>
+            <div className="text-xs text-slate-400 mt-0.5">{closedGrants.length} closed</div>
+          </div>
         </div>
 
-        {/* Awarded banner */}
-        {data.awarded > 0 && (
-          <div
-            className="rounded-2xl p-5 mb-6 flex items-center justify-between"
-            style={{
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.06) 100%)',
-              border: '1px solid rgba(16, 185, 129, 0.15)',
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.745 3.745 0 011.043 3.296A3.745 3.745 0 0121 12z" />
-                </svg>
+        {/* Total Addressable Funding Banner */}
+        <div className="glass-solid rounded-2xl p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Addressable Funding</div>
+              <div className="text-3xl font-bold text-slate-900 mt-1">
+                {formatCurrency(totalAddressable)}+
               </div>
-              <div>
-                <p className="text-sm font-semibold text-emerald-800">{data.awarded} grant{data.awarded !== 1 ? 's' : ''} awarded</p>
-                <p className="text-xs text-emerald-600">{formatCurrency(data.awardedAmount)} secured</p>
+              <div className="text-xs text-slate-500 mt-1">
+                Across {grants.filter(g => g.window_status !== 'Closed').length} active grants (excludes closed windows and uncapped programs)
               </div>
             </div>
-            <Link href="/pipeline" className="btn-ghost text-xs text-emerald-700">View in pipeline</Link>
+            <div className="text-right">
+              <div className="text-xs text-slate-500">In Pipeline</div>
+              <div className="text-2xl font-bold text-blue-600">{pipeline.length}</div>
+              <div className="text-xs text-slate-400">applications</div>
+            </div>
           </div>
-        )}
+        </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          {/* Pipeline summary */}
-          <div className="col-span-2 card p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-sm font-semibold text-slate-800">Pipeline Overview</h2>
-              <Link href="/pipeline" className="btn-ghost text-xs">View board</Link>
-            </div>
-            {Object.keys(data.applicationsByStage).length > 0 ? (
-              <div className="space-y-2.5">
-                {PIPELINE_STAGES.filter((s) => data.applicationsByStage[s]).map((stage) => {
-                  const count = data.applicationsByStage[stage]
-                  const total = Object.values(data.applicationsByStage).reduce((a, b) => a + b, 0)
-                  const pct = total > 0 ? (count / total) * 100 : 0
-                  return (
-                    <div key={stage} className="flex items-center gap-3">
-                      <span className={cn('badge text-[10px] w-36 justify-center', STAGE_COLORS[stage] || 'bg-slate-100 text-slate-500')}>
-                        {stage}
-                      </span>
-                      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-blue-400 transition-all duration-700"
-                          style={{ width: `${Math.max(pct, 4)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-slate-600 w-6 text-right">{count}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <EmptyState icon="pipeline" message="No applications in pipeline" sub="Add grants to the pipeline to track progress" />
-            )}
-
-            {/* Top applications */}
-            {data.topApplications.length > 0 && (
-              <>
-                <div className="h-px bg-slate-100 my-5" />
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">Active Applications</h3>
-                <div className="space-y-2">
-                  {data.topApplications.map((app) => (
-                    <Link key={app.id} href={`/pipeline/${app.id}`} className="flex items-center justify-between py-2 px-3 -mx-3 rounded-xl hover:bg-white/40 transition-colors">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className={cn('badge text-[10px] shrink-0', STAGE_COLORS[app.stage] || 'bg-slate-100 text-slate-500')}>
-                          {app.stage}
-                        </span>
-                        <span className="text-sm text-slate-700 truncate">{app.grant?.name || 'Unnamed'}</span>
-                      </div>
-                      {app.target_amount && (
-                        <span className="text-xs font-medium text-slate-500 shrink-0 ml-3">{formatCurrency(app.target_amount)}</span>
-                      )}
-                    </Link>
-                  ))}
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          {/* ============= SECTION 2: BLOCKER TRACKER ============= */}
+          <div className="card p-0 overflow-hidden">
+            <div className="p-5 border-b border-white/20">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-slate-800">Blocker Tracker</h2>
+                <div className="flex items-center gap-2">
+                  {activeBlockers.length > 0 && (
+                    <span className="badge bg-red-100 text-red-600 text-[10px]">
+                      {activeBlockers.length} blocking
+                    </span>
+                  )}
+                  {inProgressBlockers.length > 0 && (
+                    <span className="badge bg-amber-50 text-amber-600 text-[10px]">
+                      {inProgressBlockers.length} in progress
+                    </span>
+                  )}
+                  {resolvedBlockers.length > 0 && (
+                    <span className="badge bg-emerald-50 text-emerald-600 text-[10px]">
+                      {resolvedBlockers.length} resolved
+                    </span>
+                  )}
                 </div>
-              </>
-            )}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Structural prerequisites. Resolving one unlocks multiple grants.</p>
+            </div>
+
+            <div className="divide-y divide-white/10">
+              {blockers.map((blocker) => {
+                const isExpanded = expandedBlocker === blocker.id
+                const statusIcon = blocker.status === 'resolved' ? '✅' : blocker.status === 'in_progress' ? '🟡' : '🔴'
+                return (
+                  <div key={blocker.id} className={cn('transition-opacity', blocker.status === 'resolved' && 'opacity-50')}>
+                    <button
+                      onClick={() => setExpandedBlocker(isExpanded ? null : blocker.id)}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-white/20 text-left transition-colors"
+                    >
+                      <span className="text-sm">{statusIcon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700">{blocker.name}</span>
+                          {blocker.owner && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/40 text-slate-500">{blocker.owner}</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {blocker.unlock_value} · {blocker.time_to_fix}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400">
+                          {blocker.grants_blocked?.length || 0} grants
+                        </span>
+                        <svg className={cn("w-3.5 h-3.5 text-slate-300 transition-transform", isExpanded && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="px-4 pb-4 ml-8">
+                        {blocker.description && (
+                          <p className="text-xs text-slate-500 mb-3">{blocker.description}</p>
+                        )}
+                        {blocker.action_needed && (
+                          <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-200/30 mb-3">
+                            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider mb-0.5">Next Action</p>
+                            <p className="text-xs text-slate-600">{blocker.action_needed}</p>
+                          </div>
+                        )}
+                        {blocker.grants_blocked && blocker.grants_blocked.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Grants Blocked</p>
+                            <div className="flex flex-wrap gap-1">
+                              {blocker.grants_blocked.map((g, i) => (
+                                <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/50 text-slate-500 border border-white/30">{g}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <select
+                          value={blocker.status}
+                          onChange={(e) => updateBlockerStatus(blocker.id, e.target.value)}
+                          className="select-field text-xs w-36"
+                        >
+                          <option value="blocking">Blocking</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Right column */}
-          <div className="space-y-4">
-            {/* Activity */}
-            <div className="card p-6">
-              <h2 className="text-sm font-semibold text-slate-800 mb-4">Recent Activity</h2>
-              {data.recentActivity.length > 0 ? (
-                <div className="space-y-3">
-                  {data.recentActivity.map((log) => (
-                    <div key={log.id} className="flex items-start gap-2.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-300 mt-2 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          <span className="font-medium">{log.action}</span>
-                          {log.details && <span className="text-slate-400"> — {log.details}</span>}
-                        </p>
-                        <p className="text-[10px] text-slate-300 mt-0.5">{formatDate(log.created_at)}</p>
-                      </div>
-                    </div>
-                  ))}
+          {/* ============= SECTION 3: PRIORITY ACTIONS ============= */}
+          <div className="card p-0 overflow-hidden">
+            <div className="p-5 border-b border-white/20">
+              <h2 className="text-base font-semibold text-slate-800">Priority Actions</h2>
+              <p className="text-xs text-slate-400 mt-1">Generated from blocker status and grant deadlines</p>
+            </div>
+
+            <div className="divide-y divide-white/10 max-h-[520px] overflow-y-auto">
+              {urgentActions.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-sm text-slate-400">No urgent actions. All blockers resolved and no imminent deadlines.</p>
                 </div>
               ) : (
-                <p className="text-xs text-slate-300 italic py-4 text-center">No activity yet</p>
+                urgentActions.map((action, i) => (
+                  <div key={i} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5',
+                        action.urgency === 'blocker' ? 'bg-red-400' :
+                        action.urgency === 'critical' ? 'bg-orange-400' : 'bg-amber-400'
+                      )}>
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700">{action.title}</span>
+                          <span className={cn(
+                            'badge text-[10px]',
+                            action.type === 'blocker' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
+                          )}>
+                            {action.type === 'blocker' ? 'Blocker' : 'Deadline'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{action.action}</p>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/40 text-slate-400 mt-1.5 inline-block">{action.owner}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
-
-            {/* Recent grants */}
-            {data.recentGrants.length > 0 && (
-              <div className="card p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-semibold text-slate-800">Recently Added</h2>
-                  <Link href="/grants" className="btn-ghost text-xs">All grants</Link>
-                </div>
-                <div className="space-y-2">
-                  {data.recentGrants.map((g) => (
-                    <Link key={g.id} href={`/grants/${g.id}`} className="block py-2 px-3 -mx-3 rounded-xl hover:bg-white/40 transition-colors">
-                      <p className="text-sm text-slate-700 truncate">{g.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {g.category && <span className="text-[10px] text-blue-500">{g.category.name}</span>}
-                        {g.funding_source && <span className="text-[10px] text-slate-400">{g.funding_source}</span>}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Deadlines */}
-        <div className="mt-4 card p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-sm font-semibold text-slate-800">Upcoming Deadlines</h2>
+        {/* ============= SECTION 4: DEADLINE TIMELINE ============= */}
+        <div className="card p-0 overflow-hidden mb-6">
+          <div className="p-5 border-b border-white/20">
+            <h2 className="text-base font-semibold text-slate-800">Deadline Timeline</h2>
+            <p className="text-xs text-slate-400 mt-1">Upcoming grant windows sorted by urgency</p>
           </div>
-          {data.upcomingDeadlines.length > 0 ? (
-            <div className="grid grid-cols-3 gap-3">
-              {data.upcomingDeadlines.map((d, i) => (
-                <Link
-                  key={`${d.id}-${d.type}-${i}`}
-                  href={d.type === 'grant_window' ? `/grants/${d.id}` : `/pipeline/${d.id}`}
-                  className="p-4 rounded-xl transition-all duration-200 hover:bg-white/40"
-                  style={{ background: 'rgba(0,0,0,0.015)', border: '1px solid rgba(0,0,0,0.03)' }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={cn(
-                      'text-xs font-semibold',
-                      d.daysLeft <= 7 ? 'text-rose-500' : d.daysLeft <= 30 ? 'text-amber-600' : 'text-slate-500'
-                    )}>
-                      {d.daysLeft}d left
-                    </span>
-                    <span className="text-[10px] text-slate-300">
-                      {d.type === 'grant_window' ? 'Window closes' : d.type === 'submission' ? 'Submission' : 'Internal'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-700 truncate">{d.name}</p>
-                  <p className="text-[11px] text-slate-400 mt-1">{formatDate(d.deadline)}</p>
-                </Link>
-              ))}
+
+          {upcomingDeadlines.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm text-slate-400">No upcoming deadlines with specific dates. Check Rolling grants for always-open opportunities.</p>
             </div>
           ) : (
-            <p className="text-sm text-slate-300 text-center py-6 italic">No upcoming deadlines</p>
+            <div className="divide-y divide-white/10">
+              {upcomingDeadlines.map((grant) => {
+                const days = grant.daysLeft || 0
+                const urgencyColor = days <= 30 ? 'text-red-600 bg-red-50' :
+                  days <= 90 ? 'text-amber-600 bg-amber-50' :
+                  'text-blue-600 bg-blue-50'
+                const barColor = days <= 30 ? 'bg-red-400' : days <= 90 ? 'bg-amber-400' : 'bg-blue-400'
+                const barWidth = Math.max(5, Math.min(100, 100 - (days / 365) * 100))
+
+                return (
+                  <div key={grant.id} className="p-4 hover:bg-white/20 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={cn('text-xs font-bold px-2.5 py-1 rounded-lg shrink-0', urgencyColor)}>
+                        {days}d
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700 truncate">{grant.name}</span>
+                          {grant.max_amount && (
+                            <span className="text-[10px] text-slate-400 shrink-0">up to {formatCurrency(grant.max_amount)}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <div className="flex-1 h-1.5 rounded-full bg-slate-100/60 overflow-hidden">
+                            <div
+                              className={cn('h-full rounded-full transition-all', barColor)}
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-400 shrink-0">{formatDeadline(grant.application_window_closes)}</span>
+                        </div>
+                      </div>
+                      <span className={cn(
+                        'text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0',
+                        STATUS_CONFIG[grant.window_status || 'Unknown']?.color || 'text-slate-400',
+                        'bg-white/40'
+                      )}>
+                        {grant.window_status}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
+
+        {/* ============= SECTION 5: FULL GRANT TABLE ============= */}
+        <div className="card p-0 overflow-hidden mb-6">
+          <div className="p-5 border-b border-white/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">All Grants ({grants.length})</h2>
+                <p className="text-xs text-slate-400 mt-1">Complete database sorted by relevance</p>
+              </div>
+              <Link href="/grants" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                View Details →
+              </Link>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/15">
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-left p-3 pl-5">Grant</th>
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-left p-3">Source</th>
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right p-3">Max</th>
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center p-3">Match</th>
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center p-3">Status</th>
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center p-3">Effort</th>
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right p-3 pr-5">Deadline</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {grants.map((grant) => {
+                  const statusCfg = STATUS_CONFIG[grant.window_status || 'Unknown'] || STATUS_CONFIG['Unknown']
+                  const score = grant.relevance_score || 0
+                  const scoreColor = score >= 90 ? 'text-emerald-600' : score >= 70 ? 'text-blue-600' : score >= 50 ? 'text-amber-600' : 'text-slate-400'
+
+                  return (
+                    <tr key={grant.id} className={cn('hover:bg-white/20 transition-colors', grant.window_status === 'Closed' && 'opacity-40')}>
+                      <td className="p-3 pl-5">
+                        <span className="text-xs font-medium text-slate-700">{grant.name}</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/40 text-slate-500">{grant.funding_source}</span>
+                      </td>
+                      <td className="p-3 text-right">
+                        <span className="text-xs font-medium text-slate-700">
+                          {grant.max_amount ? formatCurrency(grant.max_amount) : 'Varies'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={cn('text-xs font-bold', scoreColor)}>{score}%</span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium bg-white/40', statusCfg.color)}>
+                          {statusCfg.label}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={cn('text-[10px]',
+                          grant.effort_level === 'Low' ? 'text-emerald-500' :
+                          grant.effort_level === 'Medium' ? 'text-amber-500' :
+                          grant.effort_level === 'High' ? 'text-orange-500' : 'text-red-500'
+                        )}>{grant.effort_level || '—'}</span>
+                      </td>
+                      <td className="p-3 pr-5 text-right">
+                        <span className="text-[10px] text-slate-400">
+                          {grant.application_window_closes ? formatDeadline(grant.application_window_closes) : '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </AppShell>
-  )
-}
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
-  return (
-    <div className="card p-5">
-      <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">{label}</p>
-      <p className={`text-2xl font-semibold tracking-tight ${color}`}>{value}</p>
-      <p className="text-xs text-slate-400 mt-1">{sub}</p>
-    </div>
-  )
-}
-
-function EmptyState({ icon, message, sub }: { icon: string; message: string; sub: string }) {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="text-center">
-        <div
-          className="inline-flex items-center justify-center w-10 h-10 rounded-xl mb-2"
-          style={{ background: 'rgba(59, 130, 246, 0.06)', border: '1px solid rgba(59, 130, 246, 0.08)' }}
-        >
-          <svg className="w-5 h-5 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
-          </svg>
-        </div>
-        <p className="text-sm text-slate-500">{message}</p>
-        <p className="text-xs text-slate-300 mt-0.5">{sub}</p>
-      </div>
-    </div>
   )
 }
