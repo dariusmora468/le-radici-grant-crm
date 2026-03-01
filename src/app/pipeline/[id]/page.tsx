@@ -53,6 +53,18 @@ export default function ApplicationDetailPage() {
   const [applicationId, setApplicationId] = useState<string | null>(null)
   const [applicationProgress, setApplicationProgress] = useState(0)
 
+  // Q&A state
+  const [qaQuestion, setQaQuestion] = useState('')
+  const [qaLoading, setQaLoading] = useState(false)
+  const [qaHistory, setQaHistory] = useState<Array<{
+    question: string
+    answer: string
+    sources: Array<{ title: string; url: string; relevance?: string }>
+    confidence: string
+    follow_up_suggestions?: string[]
+  }>>([])
+  const [qaError, setQaError] = useState<string | null>(null)
+
   const fetchData = useCallback(async () => {
     const id = params.id as string
     const [appRes, actRes, conRes, stratRes, appWorkspaceRes] = await Promise.all([
@@ -257,6 +269,37 @@ export default function ApplicationDetailPage() {
     router.push(`/applications/${newApp.id}`)
   }
 
+  async function askQuestion(q?: string) {
+    const question = q || qaQuestion.trim()
+    if (!question || !app?.grant || qaLoading) return
+    setQaLoading(true)
+    setQaError(null)
+    setQaQuestion('')
+    try {
+      const { data: project } = await supabase.from('projects').select('*').limit(1).single()
+      const res = await fetch('/api/grant-qa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, grant: app.grant, project }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to get answer' }))
+        throw new Error(err.error || `Error: ${res.status}`)
+      }
+      const data = await res.json()
+      setQaHistory(prev => [...prev, {
+        question,
+        answer: data.answer || 'No answer available.',
+        sources: data.sources || [],
+        confidence: data.confidence || 'medium',
+        follow_up_suggestions: data.follow_up_suggestions || [],
+      }])
+    } catch (err: any) {
+      setQaError(err.message || 'Failed to answer question')
+    }
+    setQaLoading(false)
+  }
+
   if (loading) {
     return (
       <AppShell>
@@ -432,6 +475,131 @@ export default function ApplicationDetailPage() {
             </div>
           </Link>
         )}
+
+        {/* === GRANT Q&A SECTION === */}
+        <div className="card p-0 overflow-hidden mb-4">
+          <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-slate-800">Ask anything about this grant</h3>
+              <p className="text-[10px] text-slate-400">Get AI-powered answers with verified sources</p>
+            </div>
+          </div>
+
+          <div className="px-5 py-4">
+            {/* Input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={qaQuestion}
+                onChange={(e) => setQaQuestion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askQuestion() } }}
+                placeholder="e.g. What documents do I need? What's the co-financing rate? Am I eligible as a young farmer?"
+                className="input-field flex-1 text-sm"
+                disabled={qaLoading}
+              />
+              <button
+                onClick={() => askQuestion()}
+                disabled={!qaQuestion.trim() || qaLoading}
+                className="btn-primary px-4 shrink-0 disabled:opacity-40"
+              >
+                {qaLoading ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {qaError && (
+              <p className="text-xs text-rose-500 mt-2">{qaError}</p>
+            )}
+
+            {/* Loading indicator */}
+            {qaLoading && (
+              <div className="flex items-center gap-2 mt-4 px-1">
+                <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                <span className="text-xs text-slate-500">Researching your question with web sources...</span>
+              </div>
+            )}
+
+            {/* Q&A History */}
+            {qaHistory.length > 0 && (
+              <div className="mt-4 space-y-4">
+                {qaHistory.map((qa, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.04)' }}>
+                    {/* Question */}
+                    <div className="px-4 py-2.5 flex items-start gap-2" style={{ background: 'rgba(59,130,246,0.04)' }}>
+                      <span className="text-blue-500 text-xs font-bold mt-0.5 shrink-0">Q</span>
+                      <p className="text-sm text-slate-700 font-medium">{qa.question}</p>
+                    </div>
+                    {/* Answer */}
+                    <div className="px-4 py-3">
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{qa.answer}</p>
+
+                      {/* Sources */}
+                      {qa.sources.length > 0 && (
+                        <div className="mt-3 pt-3 flex flex-wrap gap-2" style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider self-center">Sources:</span>
+                          {qa.sources.map((s, j) => (
+                            <a
+                              key={j}
+                              href={s.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg transition-colors"
+                              style={{ background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.1)' }}
+                              title={s.relevance || s.title}
+                            >
+                              <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.386-3.04a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364l1.757 1.757" />
+                              </svg>
+                              <span className="truncate max-w-[200px]">{s.title}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Confidence + follow-ups */}
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className={cn(
+                          'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                          qa.confidence === 'high' ? 'bg-emerald-50 text-emerald-600' :
+                          qa.confidence === 'medium' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-500'
+                        )}>
+                          {qa.confidence} confidence
+                        </span>
+                      </div>
+
+                      {/* Follow-up suggestions */}
+                      {qa.follow_up_suggestions && qa.follow_up_suggestions.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {qa.follow_up_suggestions.map((suggestion, k) => (
+                            <button
+                              key={k}
+                              onClick={() => { setQaQuestion(suggestion); askQuestion(suggestion) }}
+                              className="text-[10px] text-slate-500 hover:text-blue-600 px-2.5 py-1 rounded-lg transition-colors"
+                              style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.04)' }}
+                              disabled={qaLoading}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="grid grid-cols-3 gap-4">
           {/* Left: main content */}
