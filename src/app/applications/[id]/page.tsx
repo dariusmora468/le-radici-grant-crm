@@ -54,6 +54,11 @@ export default function ApplicationWorkspacePage() {
   const [questionsLoading, setQuestionsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Review section: consultant matching
+  const [matchedConsultants, setMatchedConsultants] = useState<any[]>([])
+  const [consultantsLoading, setConsultantsLoading] = useState(false)
+  const [expandedConsultant, setExpandedConsultant] = useState<number | null>(null)
+
   const fetchData = useCallback(async () => {
     const id = params.id as string
     const [appRes, sectionsRes, docsRes] = await Promise.all([
@@ -223,6 +228,80 @@ export default function ApplicationWorkspacePage() {
     }
 
     setQuestionsLoading(false)
+  }
+
+  async function findConsultants() {
+    if (!app?.grant_application?.grant) return
+    setConsultantsLoading(true)
+    setMatchedConsultants([])
+
+    try {
+      const res = await fetch('/api/match-consultants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant: app.grant_application.grant }),
+      })
+
+      let data
+      try {
+        const text = await res.text()
+        data = JSON.parse(text)
+      } catch {
+        throw new Error('Failed to parse response')
+      }
+
+      if (data.error) throw new Error(data.error)
+      setMatchedConsultants(Array.isArray(data) ? data : data.consultants || [])
+    } catch (err: any) {
+      console.error('Consultant matching failed:', err)
+    }
+    setConsultantsLoading(false)
+  }
+
+  async function assignConsultant(consultant: any) {
+    if (!app?.grant_application?.id) return
+    setSaving(true)
+
+    // Check if consultant already exists in DB
+    const { data: existing } = await supabase
+      .from('consultants')
+      .select('id')
+      .eq('name', consultant.name)
+      .limit(1)
+
+    let consultantId: string
+    if (existing && existing.length > 0) {
+      consultantId = existing[0].id
+    } else {
+      const { data: created } = await supabase.from('consultants').insert({
+        name: consultant.name,
+        organization: consultant.organization || null,
+        email: consultant.email || null,
+        phone: consultant.phone || null,
+        specialization: consultant.specialization || null,
+        region: consultant.region || null,
+        website: consultant.website || null,
+        notes: consultant.notes || null,
+      }).select().single()
+      consultantId = created?.id
+    }
+
+    if (consultantId) {
+      await supabase.from('grant_applications').update({
+        consultant_id: consultantId,
+        updated_at: new Date().toISOString(),
+      }).eq('id', app.grant_application.id)
+
+      await supabase.from('grant_activity_log').insert({
+        application_id: app.grant_application.id,
+        action: 'Consultant assigned',
+        details: `Assigned ${consultant.name} from application review`,
+        performed_by: 'User',
+      })
+    }
+
+    setSaving(false)
+    fetchData()
   }
 
   if (loading) {
@@ -486,21 +565,89 @@ export default function ApplicationWorkspacePage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-base font-semibold text-slate-800">Budget Planner</h2>
-                  <p className="text-sm text-slate-500 mt-0.5">Structure your financial plan and cost breakdown</p>
+                  <p className="text-sm text-slate-500 mt-0.5">Structure your financial plan through guided questions</p>
                 </div>
+                {totalQuestions > 0 && (
+                  <span className="text-xs text-slate-400">{answeredCount} of {totalQuestions} answered</span>
+                )}
               </div>
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center border border-amber-100">
-                  <span className="text-2xl">💰</span>
+
+              {/* Same Q&A pattern as proposal */}
+              {totalQuestions === 0 && !questionsLoading && (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center border border-amber-100">
+                    <span className="text-2xl">💰</span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-1">Plan Your Budget</h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
+                    AI will ask about your project costs, co-financing, and budget categories based on this grant's requirements.
+                  </p>
+                  <button onClick={generateQuestions} className="btn-primary inline-flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    Start Budget Questions
+                  </button>
                 </div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-1">Budget Planner</h3>
-                <p className="text-sm text-slate-500 mb-4 max-w-sm mx-auto">
-                  Structure your costs, co-financing, and budget categories. We recommend completing the Proposal section first.
-                </p>
-                <button onClick={() => { setActiveSection('proposal') }} className="btn-secondary text-sm">
-                  Start with Proposal First
-                </button>
-              </div>
+              )}
+
+              {questionsLoading && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-slate-500">AI is preparing budget questions...</p>
+                  </div>
+                </div>
+              )}
+
+              {totalQuestions > 0 && !questionsLoading && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className={cn('h-full rounded-full transition-all',
+                          answeredCount === totalQuestions ? 'bg-emerald-400' : 'bg-amber-400'
+                        )}
+                        style={{ width: `${totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400 shrink-0">{answeredCount}/{totalQuestions}</span>
+                  </div>
+
+                  {questions.map((q, i) => (
+                    <div key={q.id} className="p-4 rounded-xl border border-slate-100" style={{ background: 'rgba(0,0,0,0.01)' }}>
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5',
+                          q.is_answered ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-50 text-amber-500'
+                        )}>
+                          {q.is_answered ? '✓' : i + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-700 mb-1">{q.question}</p>
+                          {q.guidance && <p className="text-xs text-slate-400 mb-2 italic">{q.guidance}</p>}
+                          <textarea
+                            defaultValue={q.answer || ''}
+                            onBlur={(e) => saveAnswer(q.id, e.target.value)}
+                            rows={3}
+                            className="input-field resize-none text-sm"
+                            placeholder="Type your answer here..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                    <button onClick={generateQuestions} disabled={questionsLoading} className="btn-secondary text-sm inline-flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                      More Questions
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -617,35 +764,220 @@ export default function ApplicationWorkspacePage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-base font-semibold text-slate-800">Review & Export</h2>
-                  <p className="text-sm text-slate-500 mt-0.5">Review your application and export as PDF</p>
+                  <p className="text-sm text-slate-500 mt-0.5">Review progress, find consultants, and export your application</p>
                 </div>
               </div>
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center border border-emerald-100">
-                  <span className="text-2xl">✅</span>
-                </div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-1">Review & Export</h3>
-                <p className="text-sm text-slate-500 mb-4 max-w-sm mx-auto">
-                  Complete your Proposal and Budget sections first. Then you can review everything and export a PDF to share with your consultant.
-                </p>
 
-                {/* Section completion summary */}
-                <div className="max-w-xs mx-auto mt-6 space-y-2">
+              {/* Section completion summary */}
+              <div className="mb-6 p-4 rounded-xl border border-slate-100" style={{ background: 'rgba(0,0,0,0.01)' }}>
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Application Progress</h3>
+                <div className="space-y-3">
                   {SECTION_ORDER.filter(t => t !== 'review').map((type) => {
                     const info = SECTION_LABELS[type]
                     const section = sections.find(s => s.section_type === type)
                     const progress = section?.progress || 0
                     return (
-                      <div key={type} className="flex items-center gap-3 text-left">
-                        <span className="text-sm">{info.icon}</span>
-                        <span className="text-xs text-slate-600 flex-1">{info.title}</span>
-                        <span className={cn('text-xs font-medium',
+                      <div key={type} className="flex items-center gap-3">
+                        <span className="text-base w-6 text-center">{info.icon}</span>
+                        <span className="text-sm text-slate-600 flex-1">{info.title}</span>
+                        <div className="w-32 h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className={cn('h-full rounded-full transition-all',
+                              progress >= 75 ? 'bg-emerald-400' : progress >= 40 ? 'bg-blue-400' : progress > 0 ? 'bg-slate-300' : ''
+                            )}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <span className={cn('text-xs font-semibold w-10 text-right',
                           progress >= 75 ? 'text-emerald-600' : progress > 0 ? 'text-blue-600' : 'text-slate-400'
                         )}>{progress}%</span>
                       </div>
                     )
                   })}
                 </div>
+
+                {/* Document summary */}
+                {documents.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-500">Documents</span>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {documents.filter(d => d.status === 'ready').length}/{documents.length} ready
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Consultant Matching */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800">Find Consultants</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">AI will find and rank consultants by relevance to this grant</p>
+                  </div>
+                  <button
+                    onClick={findConsultants}
+                    disabled={consultantsLoading}
+                    className="btn-primary text-sm inline-flex items-center gap-2"
+                  >
+                    {consultantsLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                        </svg>
+                        {matchedConsultants.length > 0 ? 'Search Again' : 'Find Consultants'}
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Already assigned consultant */}
+                {app.grant_application?.consultant && (
+                  <div className="mb-4 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-700">Assigned Consultant</span>
+                    </div>
+                    <p className="text-sm font-medium text-slate-700">{app.grant_application.consultant.name}</p>
+                    {app.grant_application.consultant.organization && (
+                      <p className="text-xs text-slate-500">{app.grant_application.consultant.organization}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Matched consultants list */}
+                {matchedConsultants.length > 0 && (
+                  <div className="space-y-2">
+                    {matchedConsultants.map((c, i) => {
+                      const isExpanded = expandedConsultant === i
+                      const matchScore = c.match_score || 0
+                      return (
+                        <div key={i} className="rounded-xl border border-slate-100 overflow-hidden transition-all duration-200" style={{ background: 'rgba(255,255,255,0.6)' }}>
+                          <button
+                            onClick={() => setExpandedConsultant(isExpanded ? null : i)}
+                            className="w-full flex items-center gap-3 p-4 text-left"
+                          >
+                            {/* Match score circle */}
+                            <div className="relative w-11 h-11 shrink-0">
+                              <svg className="w-11 h-11 -rotate-90" viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth="2.5" />
+                                <circle
+                                  cx="18" cy="18" r="15" fill="none"
+                                  stroke={matchScore >= 70 ? '#10b981' : matchScore >= 40 ? '#3b82f6' : '#94a3b8'}
+                                  strokeWidth="2.5"
+                                  strokeDasharray={`${matchScore * 0.942} 100`}
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-600">
+                                {matchScore}%
+                              </span>
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                              {c.specialization && (
+                                <p className="text-xs text-slate-500 truncate">{c.specialization}</p>
+                              )}
+                            </div>
+
+                            <svg className={cn('w-4 h-4 text-slate-300 transition-transform shrink-0', isExpanded && 'rotate-180')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-4 pb-4 border-t border-slate-50">
+                              <div className="grid grid-cols-2 gap-3 mt-3">
+                                {c.specialization && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Focus Area</p>
+                                    <p className="text-xs text-slate-700 mt-0.5">{c.specialization}</p>
+                                  </div>
+                                )}
+                                {c.region && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Region</p>
+                                    <p className="text-xs text-slate-700 mt-0.5">{c.region}</p>
+                                  </div>
+                                )}
+                                {c.email && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Email</p>
+                                    <a href={`mailto:${c.email}`} className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 block">{c.email}</a>
+                                  </div>
+                                )}
+                                {c.phone && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Phone</p>
+                                    <a href={`tel:${c.phone}`} className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 block">{c.phone}</a>
+                                  </div>
+                                )}
+                                {c.website && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Website</p>
+                                    <a href={c.website.startsWith('http') ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 block truncate">{c.website}</a>
+                                  </div>
+                                )}
+                                {c.organization && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Organization</p>
+                                    <p className="text-xs text-slate-700 mt-0.5">{c.organization}</p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {c.match_reasoning && (
+                                <div className="mt-3 p-2.5 rounded-lg bg-blue-50/50 border border-blue-100">
+                                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider mb-0.5">Why This Match</p>
+                                  <p className="text-xs text-blue-800">{c.match_reasoning}</p>
+                                </div>
+                              )}
+
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  onClick={() => assignConsultant(c)}
+                                  disabled={saving}
+                                  className="btn-primary text-xs inline-flex items-center gap-1.5"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                  </svg>
+                                  Assign to Application
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {consultantsLoading && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-sm text-slate-500">Finding consultants who specialize in this type of grant...</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Export button */}
+              <div className="p-4 rounded-xl border border-dashed border-slate-200 text-center">
+                <p className="text-xs text-slate-400 mb-2">PDF Export coming soon</p>
+                <p className="text-[10px] text-slate-400">Complete your proposal, budget, and document sections, then export a full application package to share with your consultant.</p>
               </div>
             </div>
           )}
