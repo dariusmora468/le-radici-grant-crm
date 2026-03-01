@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell'
 import { supabase } from '@/lib/supabase'
 import { cn, formatCurrency } from '@/lib/utils'
 import { getRealisticTotal } from '@/lib/projections'
+import VerificationBadge from '@/components/VerificationBadge'
 import type { Grant as FullGrant } from '@/lib/supabase'
 
 type Grant = {
@@ -22,6 +23,9 @@ type Grant = {
   effort_level: string | null
   description: string | null
   funding_type: string | null
+  verification_status: string | null
+  verification_confidence: number | null
+  last_verified_at: string | null
 }
 
 type Blocker = {
@@ -229,6 +233,25 @@ export default function DashboardPage() {
                     <div className="text-lg font-bold text-blue-600">{pipeline.length}</div>
                     <div className="text-[10px] text-slate-400">In pipeline</div>
                   </div>
+                  <div className="w-px h-10 bg-slate-200/40" />
+                  {(() => {
+                    const verified = grants.filter(g => g.verification_status === 'verified').length
+                    const warned = grants.filter(g => g.verification_status === 'warning' || g.verification_status === 'failed').length
+                    const pct = grants.length > 0 ? Math.round((verified / grants.length) * 100) : 0
+                    return (
+                      <div>
+                        <div className={cn(
+                          'text-lg font-bold',
+                          pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-slate-400'
+                        )}>
+                          {verified}/{grants.length}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Verified{warned > 0 && <span className="text-amber-500"> ({warned} ⚠)</span>}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             </div>
@@ -459,6 +482,7 @@ export default function DashboardPage() {
                   <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center p-3">Match</th>
                   <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center p-3">Status</th>
                   <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center p-3">Effort</th>
+                  <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center p-3">Verified</th>
                   <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right p-3 pr-5">Deadline</th>
                 </tr>
               </thead>
@@ -495,6 +519,14 @@ export default function DashboardPage() {
                           grant.effort_level === 'Medium' ? 'text-amber-500' :
                           grant.effort_level === 'High' ? 'text-orange-500' : 'text-red-500'
                         )}>{grant.effort_level || '—'}</span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <VerificationBadge
+                          status={grant.verification_status}
+                          confidence={grant.verification_confidence}
+                          lastVerifiedAt={grant.last_verified_at}
+                          showConfidence
+                        />
                       </td>
                       <td className="p-3 pr-5 text-right">
                         <span className="text-[10px] text-slate-400">

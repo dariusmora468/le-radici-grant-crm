@@ -7,6 +7,7 @@ import { supabase, FUNDING_SOURCES, FUNDING_TYPES } from '@/lib/supabase'
 import type { Grant, GrantCategory } from '@/lib/supabase'
 import { formatCurrency, daysUntil, cn } from '@/lib/utils'
 import { getRealisticTotal } from '@/lib/projections'
+import VerificationBadge from '@/components/VerificationBadge'
 
 // Compute effective status from dates, overriding stale DB values
 function getEffectiveStatus(grant: Grant): string {
@@ -278,6 +279,12 @@ export default function GrantsPage() {
                               {grant.deadlineDays}d left
                             </span>
                           )}
+                          <VerificationBadge
+                            status={grant.verification_status}
+                            confidence={grant.verification_confidence}
+                            lastVerifiedAt={grant.last_verified_at}
+                            showConfidence
+                          />
                         </div>
                       </div>
                       <div className="text-right shrink-0">

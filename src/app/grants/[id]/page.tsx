@@ -8,6 +8,7 @@ import { supabase, STAGE_COLORS } from '@/lib/supabase'
 import type { Grant, GrantApplication, Project, Consultant } from '@/lib/supabase'
 import { formatCurrency, formatDate, daysUntil, cn } from '@/lib/utils'
 import { getGrantProjection, getProbabilityDisplay } from '@/lib/projections'
+import VerificationBadge from '@/components/VerificationBadge'
 
 interface FoundConsultant {
   name: string
@@ -56,6 +57,10 @@ export default function GrantDetailPage() {
   const [searchStats, setSearchStats] = useState<ConsultantSearchStats | null>(null)
   const [dbConsultants, setDbConsultants] = useState<FoundConsultant[]>([])
   const [showDbFallback, setShowDbFallback] = useState(false)
+
+  // Verification
+  const [verifying, setVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState<any>(null)
 
   const fetchData = useCallback(async () => {
     const id = params.id as string
@@ -192,6 +197,29 @@ export default function GrantDetailPage() {
       target_amount: grant.max_amount,
     })
     fetchData()
+  }
+
+  async function handleVerify() {
+    if (!grant || verifying) return
+    setVerifying(true)
+    setVerifyResult(null)
+    try {
+      const res = await fetch('/api/verify-grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant_id: grant.id }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Verification failed' }))
+        throw new Error(err.error || 'Verification failed')
+      }
+      const data = await res.json()
+      setVerifyResult(data)
+      fetchData() // Refresh grant data with new verification status
+    } catch (err: any) {
+      setVerifyResult({ error: err.message })
+    }
+    setVerifying(false)
   }
 
   if (loading) return <AppShell><div className="flex items-center justify-center py-20"><div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div></AppShell>
@@ -380,6 +408,89 @@ export default function GrantDetailPage() {
                 </div>
               )
             })()}
+
+            {/* Data Verification */}
+            <div className="card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Data Verification</p>
+                <button
+                  onClick={handleVerify}
+                  disabled={verifying}
+                  className="text-[10px] text-blue-500 hover:text-blue-600 font-medium disabled:opacity-50"
+                >
+                  {verifying ? 'Verifying...' : grant.last_verified_at ? 'Re-verify' : 'Verify Now'}
+                </button>
+              </div>
+
+              {verifying ? (
+                <div className="flex items-center gap-2 py-3">
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-slate-500">Checking URL, cross-referencing data, scoring source...</span>
+                </div>
+              ) : (
+                <>
+                  <VerificationBadge
+                    status={grant.verification_status}
+                    confidence={grant.verification_confidence}
+                    lastVerifiedAt={grant.last_verified_at}
+                    size="lg"
+                  />
+
+                  {/* Show verification details if available */}
+                  {grant.verification_details && Object.keys(grant.verification_details).length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {grant.verification_details.source_type && (
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400">Source type</span>
+                          <span className="text-slate-600 font-medium">{grant.verification_details.source_type.replace(/_/g, ' ')}</span>
+                        </div>
+                      )}
+                      {grant.verification_details.checks_passed !== undefined && (
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400">Checks passed</span>
+                          <span className="text-slate-600 font-medium">{grant.verification_details.checks_passed}/{grant.verification_details.checks_total}</span>
+                        </div>
+                      )}
+                      {grant.verification_details.crossref_ran && (
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400">Cross-referenced</span>
+                          <span className="text-emerald-600 font-medium">Yes</span>
+                        </div>
+                      )}
+                      {grant.verification_details.discrepancy_count > 0 && (
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400">Discrepancies</span>
+                          <span className="text-amber-600 font-medium">{grant.verification_details.discrepancy_count} found</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Show fresh discrepancies from latest verify result */}
+                  {verifyResult && !verifyResult.error && verifyResult.crossref_discrepancies?.length > 0 && (
+                    <div className="mt-3 pt-3 space-y-2" style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+                      <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider">Discrepancies Found</p>
+                      {verifyResult.crossref_discrepancies.map((d: any, i: number) => (
+                        <div key={i} className={cn(
+                          'p-2 rounded-lg text-[10px]',
+                          d.severity === 'critical' ? 'bg-rose-50 text-rose-700' :
+                          d.severity === 'warning' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-600'
+                        )}>
+                          <p className="font-semibold">{d.field}: {d.severity}</p>
+                          <p>DB: {d.database_value}</p>
+                          <p>Found: {d.fresh_value}</p>
+                          {d.explanation && <p className="mt-1 opacity-80">{d.explanation}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {verifyResult?.error && (
+                    <p className="text-[10px] text-rose-500 mt-2">{verifyResult.error}</p>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
 

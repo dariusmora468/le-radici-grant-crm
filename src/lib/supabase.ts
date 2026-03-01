@@ -135,6 +135,11 @@ export interface Grant {
   created_at: string | null
   updated_at: string | null
   category?: GrantCategory | null
+  // Verification fields
+  verification_status: string | null
+  verification_confidence: number | null
+  last_verified_at: string | null
+  verification_details: Record<string, any> | null
 }
 
 export interface GrantCategory {
@@ -195,6 +200,43 @@ export interface ActivityLog {
   details: string | null
   performed_by: string | null
   created_at: string | null
+}
+
+export interface GrantVerification {
+  id: string
+  grant_id: string
+  overall_confidence: number
+  status: string
+  url_valid: boolean | null
+  url_status_code: number | null
+  url_contains_grant_name: boolean | null
+  url_domain: string | null
+  url_is_government: boolean | null
+  crossref_ran: boolean
+  crossref_amount_match: boolean | null
+  crossref_deadline_match: boolean | null
+  crossref_eligibility_match: boolean | null
+  crossref_discrepancies: any[]
+  crossref_fresh_data: Record<string, any>
+  source_quality_score: number
+  source_type: string | null
+  source_domain_authority: string | null
+  checks_passed: number
+  checks_total: number
+  issues: any[]
+  created_at: string | null
+  duration_ms: number | null
+}
+
+export const VERIFICATION_STATUSES = ['unverified', 'verified', 'warning', 'failed', 'stale'] as const
+export type VerificationStatus = typeof VERIFICATION_STATUSES[number]
+
+export const VERIFICATION_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+  verified: { label: 'Verified', color: 'text-emerald-700', bgColor: 'bg-emerald-50 border-emerald-200', icon: '✓' },
+  warning: { label: 'Discrepancies Found', color: 'text-amber-700', bgColor: 'bg-amber-50 border-amber-200', icon: '⚠' },
+  failed: { label: 'Verification Failed', color: 'text-rose-700', bgColor: 'bg-rose-50 border-rose-200', icon: '✗' },
+  stale: { label: 'Needs Re-verification', color: 'text-slate-500', bgColor: 'bg-slate-50 border-slate-200', icon: '↻' },
+  unverified: { label: 'Unverified', color: 'text-slate-400', bgColor: 'bg-slate-50/50 border-slate-100', icon: '?' },
 }
 
 export interface Project {
