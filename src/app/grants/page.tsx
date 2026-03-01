@@ -31,6 +31,7 @@ const STATUS_STYLES: Record<string, string> = {
 export default function GrantsPage() {
   const [grants, setGrants] = useState<Grant[]>([])
   const [categories, setCategories] = useState<GrantCategory[]>([])
+  const [pipelineGrantIds, setPipelineGrantIds] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterSource, setFilterSource] = useState('')
@@ -40,14 +41,21 @@ export default function GrantsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [grantsRes, catsRes] = await Promise.all([
+    const [grantsRes, catsRes, pipelineRes] = await Promise.all([
       supabase
         .from('grants')
         .select('*, category:grant_categories(*)')
         .order('relevance_score', { ascending: false, nullsFirst: false }),
       supabase.from('grant_categories').select('*').order('name'),
+      supabase.from('grant_applications').select('grant_id, stage'),
     ])
     if (grantsRes.data) setGrants(grantsRes.data)
+    if (catsRes.data) setCategories(catsRes.data)
+    if (pipelineRes.data) {
+      const map: Record<string, string> = {}
+      pipelineRes.data.forEach((p: any) => { map[p.grant_id] = p.stage })
+      setPipelineGrantIds(map)
+    }
     if (catsRes.data) setCategories(catsRes.data)
     setLoading(false)
   }, [])
@@ -235,13 +243,24 @@ export default function GrantsPage() {
           <div className="space-y-2">
             {sorted.map((grant) => {
               const isClosed = grant.effectiveStatus === 'Closed'
+              const pipelineStage = pipelineGrantIds[grant.id]
+              const inPipeline = !!pipelineStage
               return (
                 <Link key={grant.id} href={`/grants/${grant.id}`} className="block">
-                  <div className={cn('card-hover p-5', isClosed && 'opacity-40')}>
+                  <div className={cn(
+                    'card-hover p-5',
+                    isClosed && 'opacity-40',
+                    inPipeline && 'border-l-[3px] border-l-blue-400'
+                  )}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2.5 mb-1.5">
                           <h3 className="text-sm font-semibold text-slate-800 truncate">{grant.name}</h3>
+                          {inPipeline && (
+                            <span className="badge bg-blue-100 text-blue-700 shrink-0 text-[10px] font-semibold">
+                              📋 {pipelineStage}
+                            </span>
+                          )}
                           {grant.category && (
                             <span className="badge bg-blue-50 text-blue-600 shrink-0">{grant.category.name}</span>
                           )}
