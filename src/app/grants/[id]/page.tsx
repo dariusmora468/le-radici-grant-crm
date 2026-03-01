@@ -18,6 +18,22 @@ interface FoundConsultant {
   phone: string | null
   website: string | null
   notes: string | null
+  match_score?: number | null
+  match_reasoning?: string | null
+  is_existing?: boolean
+  is_verified?: boolean
+  verification?: {
+    source: string
+    website_verified: boolean | null
+    email_verified: boolean | null
+  } | null
+}
+
+interface ConsultantSearchStats {
+  existing_scored: number
+  web_discovered: number
+  sites_checked: number
+  total: number
 }
 
 export default function GrantDetailPage() {
@@ -33,9 +49,13 @@ export default function GrantDetailPage() {
 
   // Consultant search
   const [searchingConsultants, setSearchingConsultants] = useState(false)
+  const [searchCompleted, setSearchCompleted] = useState(false)
   const [foundConsultants, setFoundConsultants] = useState<FoundConsultant[]>([])
   const [consultantError, setConsultantError] = useState<string | null>(null)
   const [savedConsultantIds, setSavedConsultantIds] = useState<Set<string>>(new Set())
+  const [searchStats, setSearchStats] = useState<ConsultantSearchStats | null>(null)
+  const [dbConsultants, setDbConsultants] = useState<FoundConsultant[]>([])
+  const [showDbFallback, setShowDbFallback] = useState(false)
 
   const fetchData = useCallback(async () => {
     const id = params.id as string
@@ -85,20 +105,62 @@ export default function GrantDetailPage() {
   async function handleFindConsultants() {
     if (!grant || !project || searchingConsultants) return
     setSearchingConsultants(true)
+    setSearchCompleted(false)
     setConsultantError(null)
+    setFoundConsultants([])
+    setSearchStats(null)
+    setShowDbFallback(false)
     try {
-      const res = await fetch('/api/find-consultants', {
+      const res = await fetch('/api/match-consultants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant, project }),
       })
-      if (!res.ok) throw new Error('Search failed')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Search failed' }))
+        throw new Error(errData.error || `Search failed (${res.status})`)
+      }
       const data = await res.json()
       setFoundConsultants(data.consultants || [])
+      setSearchStats(data.stats || null)
+
+      // If no results, fetch all DB consultants as fallback
+      if (!data.consultants || data.consultants.length === 0) {
+        const { data: allConsultants } = await supabase
+          .from('consultants')
+          .select('*')
+          .order('name')
+        if (allConsultants && allConsultants.length > 0) {
+          setDbConsultants(allConsultants.map((c: any) => ({
+            ...c,
+            match_score: null,
+            match_reasoning: 'Saved in your consultant database',
+            is_existing: true,
+            is_verified: true,
+          })))
+        }
+      }
     } catch (err: any) {
-      setConsultantError(err.message)
+      setConsultantError(err.message || 'Search failed')
+      // On error, also try to load DB consultants as fallback
+      try {
+        const { data: allConsultants } = await supabase
+          .from('consultants')
+          .select('*')
+          .order('name')
+        if (allConsultants && allConsultants.length > 0) {
+          setDbConsultants(allConsultants.map((c: any) => ({
+            ...c,
+            match_score: null,
+            match_reasoning: 'Saved in your consultant database',
+            is_existing: true,
+            is_verified: true,
+          })))
+        }
+      } catch { /* DB fallback failed too */ }
     }
     setSearchingConsultants(false)
+    setSearchCompleted(true)
   }
 
   async function saveConsultant(c: FoundConsultant) {
@@ -373,7 +435,16 @@ export default function GrantDetailPage() {
               <h2 className="text-base font-semibold text-slate-900">Find Consultants</h2>
             </div>
             {foundConsultants.length > 0 && (
-              <span className="text-xs text-slate-400">{foundConsultants.length} found</span>
+              <div className="flex items-center gap-2">
+                {searchStats && (
+                  <span className="text-[10px] text-slate-400">
+                    {searchStats.existing_scored > 0 && `${searchStats.existing_scored} from DB`}
+                    {searchStats.existing_scored > 0 && searchStats.web_discovered > 0 && ' + '}
+                    {searchStats.web_discovered > 0 && `${searchStats.web_discovered} discovered`}
+                  </span>
+                )}
+                <span className="text-xs font-medium text-slate-500">{foundConsultants.length} found</span>
+              </div>
             )}
           </div>
 
@@ -383,7 +454,7 @@ export default function GrantDetailPage() {
                 <div className="w-5 h-5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
               </div>
               <p className="text-sm text-slate-600 mb-1">Searching for consultants...</p>
-              <p className="text-xs text-slate-400">Finding specialists for this type of grant in your region</p>
+              <p className="text-xs text-slate-400">Scoring database matches, searching the web, verifying contacts</p>
               <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-4 max-w-xs mx-auto">
                 <div className="h-full rounded-full animate-pulse" style={{ width: '60%', background: 'linear-gradient(90deg, #8b5cf6 0%, #3b82f6 100%)' }} />
               </div>
@@ -392,44 +463,133 @@ export default function GrantDetailPage() {
             <div className="space-y-2">
               {foundConsultants.map((c, i) => {
                 const isSaved = savedConsultantIds.has(c.name)
+                const scoreColor = (c.match_score || 0) >= 70 ? 'text-emerald-600 bg-emerald-50' :
+                  (c.match_score || 0) >= 50 ? 'text-blue-600 bg-blue-50' :
+                  (c.match_score || 0) >= 30 ? 'text-amber-600 bg-amber-50' : 'text-slate-500 bg-slate-50'
                 return (
                   <div key={i} className="flex items-start gap-4 p-4 rounded-xl" style={{ background: 'rgba(0,0,0,0.015)', border: '1px solid rgba(0,0,0,0.03)' }}>
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold text-violet-600 shrink-0" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.1)' }}>
                       {c.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-slate-800">{c.name}</h3>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h3 className="text-sm font-semibold text-slate-800">{c.name}</h3>
+                        {c.match_score != null && (
+                          <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md', scoreColor)}>
+                            {c.match_score}% match
+                          </span>
+                        )}
+                        {c.is_existing && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-500">In Database</span>
+                        )}
+                        {c.is_verified && !c.is_existing && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-500">Verified</span>
+                        )}
+                      </div>
                       {c.organization && <p className="text-xs text-slate-400">{c.organization}</p>}
                       {c.specialization && <p className="text-xs text-slate-500 mt-1">{c.specialization}</p>}
+                      {c.match_reasoning && <p className="text-xs text-slate-400 mt-1 italic">{c.match_reasoning}</p>}
                       <div className="flex items-center gap-4 mt-2">
                         {c.email && <a href={`mailto:${c.email}`} className="text-xs text-blue-600 hover:text-blue-700">{c.email}</a>}
                         {c.phone && <span className="text-xs text-slate-500">{c.phone}</span>}
                         {c.website && <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-700">Website</a>}
                       </div>
                     </div>
-                    <button
-                      onClick={() => saveConsultant(c)}
-                      disabled={isSaved}
-                      className={cn('btn-secondary text-xs shrink-0', isSaved && 'opacity-50 cursor-default')}
-                    >
-                      {isSaved ? (
-                        <><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Saved</>
-                      ) : (
-                        <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg> Save</>
-                      )}
-                    </button>
+                    {!c.is_existing && (
+                      <button
+                        onClick={() => saveConsultant(c)}
+                        disabled={isSaved}
+                        className={cn('btn-secondary text-xs shrink-0', isSaved && 'opacity-50 cursor-default')}
+                      >
+                        {isSaved ? (
+                          <><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Saved</>
+                        ) : (
+                          <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg> Save</>
+                        )}
+                      </button>
+                    )}
                   </div>
                 )
               })}
-              <div className="pt-2 text-center">
-                <Link href="/consultants" className="text-xs text-blue-600 hover:text-blue-700">View all saved consultants →</Link>
+              <div className="pt-2 flex items-center justify-between">
+                <button onClick={handleFindConsultants} className="text-xs text-violet-600 hover:text-violet-700 font-medium">
+                  Search again
+                </button>
+                <Link href="/consultants" className="text-xs text-blue-600 hover:text-blue-700">View all saved consultants &rarr;</Link>
               </div>
             </div>
+          ) : searchCompleted ? (
+            /* Search completed but found nothing */
+            <div className="text-center py-6">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-3" style={{ background: 'rgba(251,146,60,0.06)', border: '1px solid rgba(251,146,60,0.1)' }}>
+                <svg className="w-5 h-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
+                </svg>
+              </div>
+              {consultantError ? (
+                <>
+                  <p className="text-sm font-medium text-slate-700 mb-1">Search encountered an issue</p>
+                  <p className="text-xs text-rose-500 mb-3">{consultantError}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-slate-700 mb-1">No consultants found for this specific grant</p>
+                  <p className="text-xs text-slate-400 mb-3">
+                    We searched the web and your database but couldn't find specialists matching this exact grant type.
+                    {searchStats && searchStats.sites_checked > 0 && ` Checked ${searchStats.sites_checked} websites.`}
+                  </p>
+                </>
+              )}
+
+              {/* DB fallback section */}
+              {dbConsultants.length > 0 && !showDbFallback && (
+                <button
+                  onClick={() => setShowDbFallback(true)}
+                  className="btn-secondary text-xs mb-3"
+                >
+                  Show {dbConsultants.length} consultant{dbConsultants.length !== 1 ? 's' : ''} from your database
+                </button>
+              )}
+
+              <div className="flex items-center justify-center gap-3">
+                <button onClick={handleFindConsultants} className="btn-secondary text-xs">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                  Try Again
+                </button>
+                <Link href="/consultants" className="btn-ghost text-xs">
+                  Browse All Consultants
+                </Link>
+              </div>
+
+              {/* Show DB fallback consultants */}
+              {showDbFallback && dbConsultants.length > 0 && (
+                <div className="mt-4 pt-4 text-left" style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-3">From Your Database</p>
+                  <div className="space-y-2">
+                    {dbConsultants.map((c, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.01)', border: '1px solid rgba(0,0,0,0.03)' }}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-semibold text-violet-600 shrink-0" style={{ background: 'rgba(139,92,246,0.06)' }}>
+                          {c.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-xs font-semibold text-slate-700">{c.name}</h3>
+                          {c.specialization && <p className="text-[10px] text-slate-400 mt-0.5">{c.specialization}</p>}
+                          <div className="flex items-center gap-3 mt-1">
+                            {c.email && <a href={`mailto:${c.email}`} className="text-[10px] text-blue-600">{c.email}</a>}
+                            {c.website && <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600">Website</a>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
+            /* Initial state: not yet searched */
             <div className="text-center py-6">
               <p className="text-sm text-slate-500 mb-1">Find grant application specialists in your area</p>
-              <p className="text-xs text-slate-400 mb-4">We'll search for consultants who specialize in this type of funding</p>
-              {consultantError && <p className="text-xs text-rose-500 mb-3">{consultantError}</p>}
+              <p className="text-xs text-slate-400 mb-4">We'll score your saved consultants, then search the web for new specialists matching this grant</p>
               <button onClick={handleFindConsultants} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]" style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%)', boxShadow: '0 4px 16px rgba(139,92,246,0.3)' }}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                 Find Consultants
