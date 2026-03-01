@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { supabase, PIPELINE_STAGES, STAGE_COLORS, PRIORITY_LEVELS } from '@/lib/supabase'
-import type { GrantApplication, Grant, Consultant, ApplicationRequirement, ActivityLog, GrantStrategy } from '@/lib/supabase'
+import type { GrantApplication, Grant, Consultant, ActivityLog, GrantStrategy } from '@/lib/supabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 
 type FullApplication = GrantApplication & {
@@ -36,11 +36,9 @@ export default function ApplicationDetailPage() {
   const params = useParams()
   const router = useRouter()
   const [app, setApp] = useState<FullApplication | null>(null)
-  const [requirements, setRequirements] = useState<ApplicationRequirement[]>([])
   const [activity, setActivity] = useState<ActivityLog[]>([])
   const [consultants, setConsultants] = useState<Consultant[]>([])
   const [loading, setLoading] = useState(true)
-  const [newReq, setNewReq] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState('')
 
@@ -53,9 +51,8 @@ export default function ApplicationDetailPage() {
 
   const fetchData = useCallback(async () => {
     const id = params.id as string
-    const [appRes, reqRes, actRes, conRes, stratRes] = await Promise.all([
+    const [appRes, actRes, conRes, stratRes] = await Promise.all([
       supabase.from('grant_applications').select('*, grant:grants(*, category:grant_categories(*)), consultant:consultants(*)').eq('id', id).single(),
-      supabase.from('application_requirements').select('*').eq('application_id', id).order('sort_order'),
       supabase.from('grant_activity_log').select('*').eq('application_id', id).order('created_at', { ascending: false }).limit(20),
       supabase.from('consultants').select('*').order('name'),
       supabase.from('strategies').select('*').eq('grant_application_id', id).order('created_at', { ascending: false }).limit(1),
@@ -64,7 +61,6 @@ export default function ApplicationDetailPage() {
       setApp(appRes.data as FullApplication)
       setNotes(appRes.data.notes || '')
     }
-    if (reqRes.data) setRequirements(reqRes.data)
     if (actRes.data) setActivity(actRes.data)
     if (conRes.data) setConsultants(conRes.data)
 
@@ -179,27 +175,6 @@ export default function ApplicationDetailPage() {
     fetchData()
   }
 
-  async function toggleRequirement(id: string, currentMet: boolean | null) {
-    await supabase.from('application_requirements').update({ is_met: !currentMet }).eq('id', id)
-    fetchData()
-  }
-
-  async function addRequirement() {
-    if (!newReq.trim() || !app) return
-    await supabase.from('application_requirements').insert({
-      application_id: app.id,
-      requirement: newReq.trim(),
-      sort_order: requirements.length,
-    })
-    setNewReq('')
-    fetchData()
-  }
-
-  async function deleteRequirement(id: string) {
-    await supabase.from('application_requirements').delete().eq('id', id)
-    fetchData()
-  }
-
   async function saveNotes() {
     if (!app) return
     await supabase.from('grant_applications').update({ notes, updated_at: new Date().toISOString() }).eq('id', app.id)
@@ -233,9 +208,6 @@ export default function ApplicationDetailPage() {
       </AppShell>
     )
   }
-
-  const metCount = requirements.filter((r) => r.is_met).length
-  const totalReqs = requirements.length
 
   return (
     <AppShell>
@@ -472,130 +444,6 @@ export default function ApplicationDetailPage() {
                 </div>
               ) : null}
             </div>
-
-            {/* Requirements checklist */}
-            <div className="card p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-sm font-semibold text-slate-800">Requirements</h2>
-                  {totalReqs > 0 && (
-                    <span className="text-xs text-slate-400">{metCount}/{totalReqs} complete</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              {totalReqs > 0 && (
-                <div className="h-1.5 rounded-full bg-slate-100 mb-4 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-blue-400 transition-all duration-500"
-                    style={{ width: `${(metCount / totalReqs) * 100}%` }}
-                  />
-                </div>
-              )}
-
-              {/* Checklist */}
-              <div className="space-y-1.5 mb-4">
-                {requirements.map((req) => (
-                  <div key={req.id} className="flex items-center gap-3 group py-1.5 px-2 -mx-2 rounded-lg hover:bg-white/40 transition-colors">
-                    <button
-                      onClick={() => toggleRequirement(req.id, req.is_met)}
-                      className={cn(
-                        'w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all duration-200',
-                        req.is_met
-                          ? 'bg-blue-500 border-blue-500'
-                          : 'border-slate-300 hover:border-blue-400'
-                      )}
-                    >
-                      {req.is_met && (
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                        </svg>
-                      )}
-                    </button>
-                    <span className={cn('text-sm flex-1', req.is_met ? 'text-slate-400 line-through' : 'text-slate-700')}>
-                      {req.requirement}
-                    </span>
-                    <button
-                      onClick={() => deleteRequirement(req.id)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-400 transition-all"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Add requirement */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newReq}
-                  onChange={(e) => setNewReq(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addRequirement()}
-                  className="input-field text-sm"
-                  placeholder="Add a requirement..."
-                />
-                <button onClick={addRequirement} disabled={!newReq.trim()} className="btn-secondary text-xs shrink-0 disabled:opacity-50">
-                  Add
-                </button>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="card p-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-slate-800">Notes</h2>
-                {!editingNotes && (
-                  <button onClick={() => setEditingNotes(true)} className="btn-ghost text-xs">Edit</button>
-                )}
-              </div>
-              {editingNotes ? (
-                <div>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={4}
-                    className="input-field resize-none mb-3"
-                    placeholder="Add notes about this application..."
-                    autoFocus
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={() => { setEditingNotes(false); setNotes(app.notes || '') }} className="btn-ghost text-xs">Cancel</button>
-                    <button onClick={saveNotes} className="btn-primary text-xs">Save</button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500 leading-relaxed">
-                  {app.notes || <span className="text-slate-300 italic">No notes yet</span>}
-                </p>
-              )}
-            </div>
-
-            {/* Activity log */}
-            <div className="card p-6">
-              <h2 className="text-sm font-semibold text-slate-800 mb-4">Activity</h2>
-              {activity.length > 0 ? (
-                <div className="space-y-3">
-                  {activity.map((log) => (
-                    <div key={log.id} className="flex items-start gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-2 shrink-0" />
-                      <div>
-                        <p className="text-sm text-slate-600">
-                          <span className="font-medium">{log.action}</span>
-                          {log.details && <span className="text-slate-400"> - {log.details}</span>}
-                        </p>
-                        <p className="text-[11px] text-slate-300 mt-0.5">{formatDate(log.created_at)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-300 italic">No activity recorded</p>
-              )}
-            </div>
           </div>
 
           {/* Right: controls */}
@@ -696,6 +544,66 @@ export default function ApplicationDetailPage() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Notes */}
+            <div className="card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-slate-800">Notes</h2>
+                {!editingNotes && (
+                  <button
+                    onClick={() => setEditingNotes(true)}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {editingNotes ? (
+                <div>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    className="input-field resize-none text-sm mb-2"
+                    placeholder="Add a note..."
+                    autoFocus
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => { setEditingNotes(false); setNotes(app.notes || '') }} className="btn-ghost text-xs">Cancel</button>
+                    <button onClick={saveNotes} className="btn-primary text-xs">Save</button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  {app.notes || <span className="text-slate-300 italic">No notes yet</span>}
+                </p>
+              )}
+            </div>
+
+            {/* Activity log */}
+            <div className="card p-6">
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">Activity</h2>
+              {activity.length > 0 ? (
+                <div className="space-y-2.5">
+                  {activity.map((log) => (
+                    <div key={log.id} className="flex items-start gap-2">
+                      <div className="w-1 h-1 rounded-full bg-slate-300 mt-2 shrink-0" />
+                      <div>
+                        <p className="text-xs text-slate-600">
+                          <span className="font-medium">{log.action}</span>
+                          {log.details && <span className="text-slate-400"> - {log.details}</span>}
+                        </p>
+                        <p className="text-[10px] text-slate-300 mt-0.5">{formatDate(log.created_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-300 italic">No activity yet</p>
+              )}
             </div>
           </div>
         </div>
