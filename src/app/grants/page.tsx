@@ -30,15 +30,18 @@ export default function GrantsPage() {
   const [progress, setProgress] = useState<DiscoveryProgress | null>(null)
   const [discoveryResult, setDiscoveryResult] = useState<{ found: number; saved: number } | null>(null)
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
+  const [pipelineGrants, setPipelineGrants] = useState<Map<string, string>>(new Map())
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [grantsRes, projRes] = await Promise.all([
+    const [grantsRes, projRes, pipelineRes] = await Promise.all([
       supabase.from('grants').select('*, category:grant_categories(*)').order('relevance_score', { ascending: false, nullsFirst: false }),
       supabase.from('projects').select('*').limit(1).single(),
+      supabase.from('grant_applications').select('grant_id, stage'),
     ])
     if (grantsRes.data) setGrants(grantsRes.data)
     if (projRes.data) setProject(projRes.data)
+    if (pipelineRes.data) setPipelineGrants(new Map(pipelineRes.data.map(a => [a.grant_id, a.stage])))
     setLoading(false)
   }, [])
 
@@ -173,8 +176,8 @@ export default function GrantsPage() {
               <p className="text-3xl font-bold text-slate-900 tracking-tight">{grants.length}</p>
               <p className="text-xs text-slate-500 mt-1">Grants Found</p>
             </div>
-            <div className="text-center p-4 rounded-2xl" style={{ background: 'rgba(255,255,255,0.5)' }}>
-              <p className="text-3xl font-bold text-emerald-600 tracking-tight">{formatCurrency(totalPotentialValue)}</p>
+            <div className="text-center p-4 rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.5)' }}>
+              <p className="text-xl font-bold text-emerald-600 tracking-tight truncate" title={formatCurrency(totalPotentialValue)}>{formatCurrency(totalPotentialValue)}</p>
               <p className="text-xs text-slate-500 mt-1">Total Potential Value</p>
             </div>
             <div className="text-center p-4 rounded-2xl" style={{ background: 'rgba(255,255,255,0.5)' }}>
@@ -235,7 +238,14 @@ export default function GrantsPage() {
 
                 {/* Name + badges */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-700 transition-colors">{grant.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-700 transition-colors">{grant.name}</h3>
+                    {pipelineGrants.has(grant.id) && (
+                      <span className="badge bg-emerald-100 text-emerald-700 text-[10px] font-semibold shrink-0 border border-emerald-200">
+                        In Pipeline
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="badge bg-blue-50 text-blue-600 text-[10px]">{grant.funding_source}</span>
                     {grant.funding_type && grant.funding_type !== 'Grant' && (
