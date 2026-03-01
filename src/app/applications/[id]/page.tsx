@@ -885,7 +885,16 @@ export default function ApplicationWorkspacePage() {
                             </div>
 
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                                {c.is_existing ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-semibold border border-emerald-200">In Database</span>
+                                ) : c.is_verified ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold border border-blue-200">Web Verified</span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 font-semibold border border-amber-200">Unverified</span>
+                                )}
+                              </div>
                               {c.specialization && (
                                 <p className="text-xs text-slate-500 truncate">{c.specialization}</p>
                               )}
@@ -941,6 +950,30 @@ export default function ApplicationWorkspacePage() {
                                 <div className="mt-3 p-2.5 rounded-lg bg-blue-50/50 border border-blue-100">
                                   <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider mb-0.5">Why This Match</p>
                                   <p className="text-xs text-blue-800">{c.match_reasoning}</p>
+                                </div>
+                              )}
+
+                              {/* Verification details */}
+                              {c.verification && !c.is_existing && (
+                                <div className="mt-2 flex items-center gap-3 text-[10px] text-slate-400">
+                                  {c.verification.website_verified && (
+                                    <span className="flex items-center gap-1">
+                                      <svg className="w-3 h-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                                      Website verified
+                                    </span>
+                                  )}
+                                  {c.verification.email_verified && (
+                                    <span className="flex items-center gap-1">
+                                      <svg className="w-3 h-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                                      Email domain verified
+                                    </span>
+                                  )}
+                                  {c.phone && !c.verification.phone_verified && (
+                                    <span className="flex items-center gap-1">
+                                      <svg className="w-3 h-3 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                                      Phone unverified
+                                    </span>
+                                  )}
                                 </div>
                               )}
 
