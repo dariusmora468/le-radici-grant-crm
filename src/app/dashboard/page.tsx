@@ -118,12 +118,6 @@ export default function DashboardPage() {
             <p className="page-subtitle">Funding overview and pipeline status</p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/grants" className="btn-secondary text-sm">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75" />
-              </svg>
-              View Grants
-            </Link>
             <Link href="/grants/new" className="btn-primary text-sm">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
