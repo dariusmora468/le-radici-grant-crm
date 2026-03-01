@@ -5,7 +5,9 @@ const PASSWORD_KEY = 'grant_crm_password'
 
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false
-  return sessionStorage.getItem(AUTH_KEY) === 'true'
+  // Must have both the auth flag AND the actual password stored
+  // This self-heals sessions from before the password storage migration
+  return sessionStorage.getItem(AUTH_KEY) === 'true' && !!sessionStorage.getItem(PASSWORD_KEY)
 }
 
 export function setAuthenticated(password: string): void {

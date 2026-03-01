@@ -17,8 +17,17 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     headers.set('Content-Type', 'application/json')
   }
 
-  return fetch(url, {
+  const response = await fetch(url, {
     ...options,
     headers,
   })
+
+  // Self-heal: if API returns 401, clear stale session and force re-login
+  if (response.status === 401 && typeof window !== 'undefined') {
+    sessionStorage.removeItem('grant_crm_auth')
+    sessionStorage.removeItem('grant_crm_password')
+    window.location.reload()
+  }
+
+  return response
 }
