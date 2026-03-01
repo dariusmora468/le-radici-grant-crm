@@ -295,3 +295,80 @@ export interface GrantStrategy {
   risks?: string
   tips?: string
 }
+
+// Application Workspace types
+export type ApplicationStatus = 'not_started' | 'in_progress' | 'ready_for_review' | 'submitted'
+export type SectionType = 'proposal' | 'budget' | 'documents' | 'review'
+export type SectionStatus = 'not_started' | 'onboarding' | 'drafting' | 'reviewing' | 'complete'
+export type DocumentStatus = 'not_started' | 'in_progress' | 'ready'
+
+export interface Application {
+  id: string
+  grant_application_id: string
+  status: ApplicationStatus
+  overall_progress: number
+  created_at: string | null
+  updated_at: string | null
+  // Joined data
+  grant_application?: GrantApplication & { grant?: Grant | null }
+}
+
+export interface ApplicationSection {
+  id: string
+  application_id: string
+  section_type: SectionType
+  title: string
+  content: Record<string, any>
+  progress: number
+  ai_draft: string | null
+  status: SectionStatus
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface ApplicationQuestion {
+  id: string
+  section_id: string
+  question: string
+  answer: string | null
+  guidance: string | null
+  order_index: number
+  is_answered: boolean
+  batch_number: number
+  created_at: string | null
+}
+
+export interface ApplicationDocument {
+  id: string
+  application_id: string
+  document_name: string
+  description: string | null
+  status: DocumentStatus
+  notes: string | null
+  effort: 'Low' | 'Medium' | 'High' | null
+  ai_can_help: string | null
+  order_index: number
+  created_at: string | null
+  updated_at: string | null
+}
+
+export const APPLICATION_STATUSES: Record<ApplicationStatus, string> = {
+  not_started: 'Not Started',
+  in_progress: 'In Progress',
+  ready_for_review: 'Ready for Review',
+  submitted: 'Submitted',
+}
+
+export const APPLICATION_STATUS_COLORS: Record<ApplicationStatus, string> = {
+  not_started: 'bg-slate-100 text-slate-500',
+  in_progress: 'bg-blue-50 text-blue-600',
+  ready_for_review: 'bg-amber-50 text-amber-600',
+  submitted: 'bg-emerald-50 text-emerald-600',
+}
+
+export const SECTION_LABELS: Record<SectionType, { title: string; description: string; icon: string }> = {
+  proposal: { title: 'Proposal Builder', description: 'Build your project narrative through guided questions', icon: '📝' },
+  budget: { title: 'Budget Planner', description: 'Structure your financial plan and cost breakdown', icon: '💰' },
+  documents: { title: 'Document Vault', description: 'Track and prepare all required documentation', icon: '📁' },
+  review: { title: 'Review & Export', description: 'Final review and PDF export for submission', icon: '✅' },
+}
