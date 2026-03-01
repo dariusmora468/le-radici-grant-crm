@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { cn, formatCurrency } from '@/lib/utils'
 import { getRealisticTotal } from '@/lib/projections'
 import VerificationBadge from '@/components/VerificationBadge'
+import OnboardingWizard from '@/components/OnboardingWizard'
 import type { Grant as FullGrant } from '@/lib/supabase'
 
 type Grant = {
@@ -76,16 +77,20 @@ export default function DashboardPage() {
   const [pipeline, setPipeline] = useState<PipelineApp[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedBlocker, setExpandedBlocker] = useState<string | null>(null)
+  const [project, setProject] = useState<any>(null)
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
 
   const fetchData = useCallback(async () => {
-    const [grantsRes, blockersRes, pipelineRes] = await Promise.all([
+    const [grantsRes, blockersRes, pipelineRes, projRes] = await Promise.all([
       supabase.from('grants').select('*').order('relevance_score', { ascending: false }),
       supabase.from('project_blockers').select('*').order('sort_order'),
       supabase.from('grant_applications').select('id, stage, grant:grants(name, max_amount)'),
+      supabase.from('projects').select('*').limit(1).single(),
     ])
     if (grantsRes.data) setGrants(grantsRes.data)
     if (blockersRes.data) setBlockers(blockersRes.data as Blocker[])
     if (pipelineRes.data) setPipeline(pipelineRes.data as unknown as PipelineApp[])
+    if (projRes.data) setProject(projRes.data)
     setLoading(false)
   }, [])
 
@@ -105,6 +110,31 @@ export default function DashboardPage() {
       <AppShell>
         <div className="flex items-center justify-center py-20">
           <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    )
+  }
+
+  // Determine if onboarding should show
+  const profileHasBasics = !!(project?.name && project?.country && project?.primary_sector && project?.summary)
+  const shouldShowOnboarding = project && !project.onboarding_complete && !onboardingDismissed
+
+  if (shouldShowOnboarding) {
+    return (
+      <AppShell>
+        <div className="max-w-6xl mx-auto py-8">
+          <OnboardingWizard
+            projectName={project.name || ''}
+            profileComplete={profileHasBasics}
+            grantCount={grants.length}
+            pipelineCount={pipeline.length}
+            onDismiss={async () => {
+              setOnboardingDismissed(true)
+              if (project) {
+                await supabase.from('projects').update({ onboarding_complete: true }).eq('id', project.id)
+              }
+            }}
+          />
         </div>
       </AppShell>
     )
