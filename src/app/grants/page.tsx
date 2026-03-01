@@ -144,12 +144,6 @@ export default function GrantsPage() {
                 {showClosed ? 'Hide closed' : `Show closed (${closedCount})`}
               </button>
             )}
-            <Link href="/grants/new" className="btn-ghost text-sm">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Add Manually
-            </Link>
             <button
               onClick={() => setShowDiscovery(!showDiscovery)}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
