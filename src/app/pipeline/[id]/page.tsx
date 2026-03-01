@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell'
 import { supabase, PIPELINE_STAGES, STAGE_COLORS, PRIORITY_LEVELS } from '@/lib/supabase'
 import type { GrantApplication, Grant, Consultant, ActivityLog, GrantStrategy } from '@/lib/supabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 
 type FullApplication = GrantApplication & {
   grant: (Grant & { category: { name: string } | null }) | null
@@ -116,7 +117,7 @@ export default function ApplicationDetailPage() {
     }
 
     try {
-      const res = await fetch('/api/strategy', {
+      const res = await apiFetch('/api/strategy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant: app.grant, project }),
@@ -277,7 +278,7 @@ export default function ApplicationDetailPage() {
     setQaQuestion('')
     try {
       const { data: project } = await supabase.from('projects').select('*').limit(1).single()
-      const res = await fetch('/api/grant-qa', {
+      const res = await apiFetch('/api/grant-qa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, grant: app.grant, project }),

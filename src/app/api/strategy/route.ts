@@ -1,3 +1,4 @@
+import { validateAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 60
@@ -21,6 +22,8 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now()
 
   try {
+    const authError = await validateAuth(req)
+    if (authError) return authError
     // Step 1: Parse request
     let body
     try {

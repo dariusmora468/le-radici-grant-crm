@@ -1,9 +1,12 @@
+import { validateAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 120 // Allow up to 2 minutes for AI research
 
 export async function POST(req: NextRequest) {
   try {
+    const authError = await validateAuth(req)
+    if (authError) return authError
     const { project } = await req.json()
 
     if (!project) {

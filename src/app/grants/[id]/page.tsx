@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell'
 import { supabase, STAGE_COLORS } from '@/lib/supabase'
 import type { Grant, GrantApplication, Project, Consultant } from '@/lib/supabase'
 import { formatCurrency, formatDate, daysUntil, cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 import { getGrantProjection, getProbabilityDisplay } from '@/lib/projections'
 import VerificationBadge from '@/components/VerificationBadge'
 
@@ -88,7 +89,7 @@ export default function GrantDetailPage() {
     setAnalyzing(true)
     setAnalysisError(null)
     try {
-      const res = await fetch('/api/analyze-grant', {
+      const res = await apiFetch('/api/analyze-grant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant: g, project: p }),
@@ -118,7 +119,7 @@ export default function GrantDetailPage() {
     setSearchStats(null)
     setShowDbFallback(false)
     try {
-      const res = await fetch('/api/match-consultants', {
+      const res = await apiFetch('/api/match-consultants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant, project }),
@@ -278,7 +279,7 @@ export default function GrantDetailPage() {
     setVerifying(true)
     setVerifyResult(null)
     try {
-      const res = await fetch('/api/verify-grant', {
+      const res = await apiFetch('/api/verify-grant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant_id: grant.id }),

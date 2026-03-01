@@ -1,9 +1,12 @@
+import { validateAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 120
 
 export async function POST(req: NextRequest) {
   try {
+    const authError = await validateAuth(req)
+    if (authError) return authError
     const { question, grant, project } = await req.json()
     if (!question || !grant) {
       return NextResponse.json({ error: 'Missing question or grant data' }, { status: 400 })

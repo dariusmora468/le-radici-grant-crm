@@ -21,7 +21,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     setError('')
     const valid = await verifyPassword(password)
     if (valid) {
-      setAuthenticated()
+      setAuthenticated(password)
       setAuthed(true)
     } else {
       setError('Incorrect password')

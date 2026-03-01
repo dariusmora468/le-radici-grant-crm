@@ -61,9 +61,16 @@ export async function GET(req: NextRequest) {
       }
 
       try {
+        // Fetch app password for internal API auth
+        const pwRes = await fetch(`${supabaseUrl}/rest/v1/app_settings?key=eq.app_password&select=value&limit=1`, {
+          headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+        })
+        const pwData = await pwRes.json()
+        const appPassword = pwData?.[0]?.value || ''
+
         const res = await fetch(`${baseUrl}/api/verify-grant`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-app-password': appPassword },
           body: JSON.stringify({ grant_id: grantId }),
         })
 

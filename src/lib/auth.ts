@@ -1,18 +1,26 @@
 'use client'
 
 const AUTH_KEY = 'grant_crm_auth'
+const PASSWORD_KEY = 'grant_crm_password'
 
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false
   return sessionStorage.getItem(AUTH_KEY) === 'true'
 }
 
-export function setAuthenticated(): void {
+export function setAuthenticated(password: string): void {
   sessionStorage.setItem(AUTH_KEY, 'true')
+  sessionStorage.setItem(PASSWORD_KEY, password)
+}
+
+export function getStoredPassword(): string {
+  if (typeof window === 'undefined') return ''
+  return sessionStorage.getItem(PASSWORD_KEY) || ''
 }
 
 export function clearAuth(): void {
   sessionStorage.removeItem(AUTH_KEY)
+  sessionStorage.removeItem(PASSWORD_KEY)
 }
 
 export async function verifyPassword(password: string): Promise<boolean> {

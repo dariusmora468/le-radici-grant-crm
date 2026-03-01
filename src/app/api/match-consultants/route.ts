@@ -1,3 +1,4 @@
+import { validateAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 120
@@ -58,6 +59,8 @@ async function fetchPageText(url: string): Promise<string | null> {
 
 export async function POST(req: NextRequest) {
   try {
+    const authError = await validateAuth(req)
+    if (authError) return authError
     const { grant } = await req.json()
     if (!grant) {
       return NextResponse.json({ error: 'Missing grant data' }, { status: 400 })

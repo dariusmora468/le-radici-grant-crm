@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell'
 import { supabase } from '@/lib/supabase'
 import type { Consultant } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 
 const emptyForm = {
   name: '',
@@ -71,7 +72,7 @@ function ConsultantsContent() {
       const grant = appRes.data?.grant || { name: grantName }
       const project = projectRes.data || { name: 'Agricultural estate conversion', region: 'Tuscany', country: 'Italy' }
 
-      const res = await fetch('/api/find-consultants', {
+      const res = await apiFetch('/api/find-consultants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant, project }),

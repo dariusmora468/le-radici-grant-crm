@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell'
 import { supabase, SECTION_LABELS, APPLICATION_STATUSES, APPLICATION_STATUS_COLORS } from '@/lib/supabase'
 import type { Application, ApplicationSection, ApplicationDocument, ApplicationQuestion, SectionType } from '@/lib/supabase'
 import { cn, formatCurrency } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 
 type FullApplication = Application & {
   grant_application: {
@@ -110,7 +111,7 @@ export default function ApplicationWorkspacePage() {
     setQuestionsLoading(true)
 
     try {
-      const res = await fetch('/api/application-questions', {
+      const res = await apiFetch('/api/application-questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +195,7 @@ export default function ApplicationWorkspacePage() {
     setQuestionsLoading(true)
 
     try {
-      const res = await fetch('/api/application-draft', {
+      const res = await apiFetch('/api/application-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -236,7 +237,7 @@ export default function ApplicationWorkspacePage() {
     setMatchedConsultants([])
 
     try {
-      const res = await fetch('/api/match-consultants', {
+      const res = await apiFetch('/api/match-consultants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant: app.grant_application.grant }),

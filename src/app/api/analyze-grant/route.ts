@@ -1,9 +1,12 @@
+import { validateAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
+    const authError = await validateAuth(req)
+    if (authError) return authError
     const { grant, project } = await req.json()
     if (!grant || !project) {
       return NextResponse.json({ error: 'Missing grant or project data' }, { status: 400 })
