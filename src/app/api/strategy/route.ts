@@ -122,12 +122,27 @@ Respond with ONLY a JSON object (no markdown, no backticks, no preamble). The st
     })
 
     if (!response.ok) {
-      const errText = await response.text()
-      console.error('Anthropic API error:', response.status, errText)
-      return NextResponse.json({ error: `API error: ${response.status}` }, { status: 502 })
+      let errMsg = `Anthropic API returned status ${response.status}`
+      try {
+        const errData = await response.json()
+        errMsg = errData?.error?.message || errMsg
+      } catch {
+        // response wasn't JSON, use status message
+      }
+      console.error('Anthropic API error:', errMsg)
+      return NextResponse.json({ error: errMsg }, { status: 502 })
     }
 
-    const data = await response.json()
+    let data
+    try {
+      data = await response.json()
+    } catch {
+      return NextResponse.json({ error: 'Anthropic returned an invalid response. Please try again.' }, { status: 502 })
+    }
+
+    if (!data.content || !Array.isArray(data.content)) {
+      return NextResponse.json({ error: 'Unexpected response format from AI. Please try again.' }, { status: 502 })
+    }
 
     // Extract text from response (may have tool_use blocks mixed in)
     const text = data.content
@@ -135,26 +150,40 @@ Respond with ONLY a JSON object (no markdown, no backticks, no preamble). The st
       .map((item: any) => item.text)
       .join('\n')
 
-    // Parse the JSON response
+    if (!text || text.trim().length === 0) {
+      return NextResponse.json({ error: 'AI returned an empty response. Please try again.' }, { status: 502 })
+    }
+
+    // Parse the JSON response with multiple fallback strategies
     let strategy
     try {
       const cleaned = text.replace(/```json|```/g, '').trim()
-      // Find the JSON object
-      const match = cleaned.match(/\{[\s\S]*\}/)
-      if (match) {
-        strategy = JSON.parse(match[0])
-      } else {
-        throw new Error('No JSON object found in response')
+
+      // Strategy 1: Try parsing the full cleaned text as JSON
+      try {
+        strategy = JSON.parse(cleaned)
+      } catch {
+        // Strategy 2: Find a JSON object in the text
+        const match = cleaned.match(/\{[\s\S]*\}/)
+        if (match) {
+          strategy = JSON.parse(match[0])
+        } else {
+          throw new Error('No JSON object found')
+        }
       }
     } catch (parseErr: any) {
-      console.error('Parse error:', parseErr)
-      console.error('Raw text:', text.substring(0, 500))
-      return NextResponse.json({ error: 'Failed to parse strategy data. Please try again.' }, { status: 500 })
+      console.error('Parse error:', parseErr.message)
+      console.error('Raw text (first 500 chars):', text.substring(0, 500))
+      return NextResponse.json({
+        error: 'The AI generated a response but it was not in the expected format. This sometimes happens with complex searches. Please try again.'
+      }, { status: 500 })
     }
 
     // Validate required fields
     if (!strategy.grants_ranked || !Array.isArray(strategy.grants_ranked)) {
-      return NextResponse.json({ error: 'Invalid strategy format' }, { status: 500 })
+      return NextResponse.json({
+        error: 'The AI response was missing grant data. Please try again.'
+      }, { status: 500 })
     }
 
     // Compute summary stats

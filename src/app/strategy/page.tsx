@@ -151,15 +151,24 @@ export default function StrategyPage() {
 
       clearInterval(interval)
 
+      // Safely parse the response (handle both JSON and non-JSON)
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error('Server returned an unexpected response. Please try again.')
+      }
+
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Strategy generation failed')
+        throw new Error(data?.error || `Strategy generation failed (status ${res.status})`)
+      }
+
+      if (!data.grants_ranked || !Array.isArray(data.grants_ranked)) {
+        throw new Error('Strategy data was incomplete. Please try again.')
       }
 
       setGenPhase('Saving strategy...')
       setGenPct(95)
-
-      const data = await res.json()
 
       // Save to database
       const { data: saved, error: saveErr } = await supabase.from('strategies').insert({
@@ -183,7 +192,7 @@ export default function StrategyPage() {
       setGenPhase('Complete!')
     } catch (err: any) {
       clearInterval(interval)
-      setError(err.message)
+      setError(err.message || 'Something went wrong. Please try again.')
     }
     setGenerating(false)
   }
