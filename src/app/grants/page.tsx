@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { supabase, FUNDING_SOURCES, FUNDING_TYPES } from '@/lib/supabase'
-import type { Grant, GrantCategory } from '@/lib/supabase'
+import type { Grant, GrantCategory, Project } from '@/lib/supabase'
 import { formatCurrency, daysUntil, cn } from '@/lib/utils'
 import { getRealisticTotal } from '@/lib/projections'
 import VerificationBadge from '@/components/VerificationBadge'
+import GrantDiscovery from '@/components/GrantDiscovery'
 
 // Compute effective status from dates, overriding stale DB values
 function getEffectiveStatus(grant: Grant): string {
@@ -38,16 +39,19 @@ export default function GrantsPage() {
   const [filterType, setFilterType] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [showClosed, setShowClosed] = useState(false)
+  const [project, setProject] = useState<Project | null>(null)
+  const [showDiscovery, setShowDiscovery] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [grantsRes, catsRes, pipelineRes] = await Promise.all([
+    const [grantsRes, catsRes, pipelineRes, projRes] = await Promise.all([
       supabase
         .from('grants')
         .select('*, category:grant_categories(*)')
         .order('relevance_score', { ascending: false, nullsFirst: false }),
       supabase.from('grant_categories').select('*').order('name'),
       supabase.from('grant_applications').select('grant_id, stage'),
+      supabase.from('projects').select('*').limit(1).single(),
     ])
     if (grantsRes.data) setGrants(grantsRes.data)
     if (catsRes.data) setCategories(catsRes.data)
@@ -56,6 +60,7 @@ export default function GrantsPage() {
       pipelineRes.data.forEach((p: any) => { map[p.grant_id] = p.stage })
       setPipelineGrantIds(map)
     }
+    if (projRes.data) setProject(projRes.data)
     if (catsRes.data) setCategories(catsRes.data)
     setLoading(false)
   }, [])
@@ -139,12 +144,22 @@ export default function GrantsPage() {
                 {showClosed ? 'Hide closed' : `Show closed (${closedCount})`}
               </button>
             )}
-            <Link href="/grants/new" className="btn-primary">
+            <Link href="/grants/new" className="btn-ghost text-sm">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Add Grant
+              Add Manually
             </Link>
+            <button
+              onClick={() => setShowDiscovery(!showDiscovery)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%)', boxShadow: '0 4px 16px rgba(59,130,246,0.25)' }}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+              </svg>
+              Discover Grants
+            </button>
           </div>
         </div>
 
@@ -185,6 +200,24 @@ export default function GrantsPage() {
             )}
           </div>
         </div>
+
+        {/* Grant Discovery */}
+        {showDiscovery && project && (
+          <GrantDiscovery
+            project={project}
+            existingGrantNames={grants.map(g => g.name)}
+            onComplete={() => { setShowDiscovery(false); fetchData() }}
+          />
+        )}
+
+        {/* Show discovery CTA when no grants exist */}
+        {!loading && grants.length === 0 && !showDiscovery && project && (
+          <GrantDiscovery
+            project={project}
+            existingGrantNames={[]}
+            onComplete={() => fetchData()}
+          />
+        )}
 
         {/* Funding Summary */}
         {!loading && filtered.length > 0 && (() => {
