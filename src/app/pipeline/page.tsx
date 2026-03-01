@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { supabase, PIPELINE_STAGES, STAGE_COLORS } from '@/lib/supabase'
@@ -24,93 +24,131 @@ export default function PipelinePage() {
   const [applications, setApplications] = useState<AppWithGrant[]>([])
   const [loading, setLoading] = useState(true)
   const [showClosed, setShowClosed] = useState(false)
+
+  // Drag state
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
+  const [dropIndex, setDropIndex] = useState<number | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase
       .from('grant_applications')
       .select('*, grant:grants(*, category:grant_categories(*))')
-      .order('updated_at', { ascending: false })
+      .order('position', { ascending: true })
     if (data) setApplications(data as AppWithGrant[])
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  async function moveToStage(appId: string, newStage: string) {
-    // Optimistic update for instant feel
+  function getCardsForStage(stage: string): AppWithGrant[] {
+    return applications
+      .filter(a => a.stage === stage)
+      .sort((a, b) => (a.position || 0) - (b.position || 0))
+  }
+
+  function calcNewPosition(cards: AppWithGrant[], targetIndex: number): number {
+    if (cards.length === 0) return 1000
+    if (targetIndex === 0) return (cards[0]?.position || 1000) - 1000
+    if (targetIndex >= cards.length) return (cards[cards.length - 1]?.position || 0) + 1000
+    const before = cards[targetIndex - 1]?.position || 0
+    const after = cards[targetIndex]?.position || before + 2000
+    return Math.round((before + after) / 2)
+  }
+
+  async function moveCard(appId: string, targetStage: string, targetIndex: number) {
+    const targetCards = getCardsForStage(targetStage).filter(c => c.id !== appId)
+    const newPosition = calcNewPosition(targetCards, targetIndex)
+    const app = applications.find(a => a.id === appId)
+    const stageChanged = app?.stage !== targetStage
+
+    // Optimistic update
     setApplications(prev => prev.map(a =>
-      a.id === appId ? { ...a, stage: newStage, updated_at: new Date().toISOString() } : a
+      a.id === appId ? { ...a, stage: targetStage, position: newPosition, updated_at: new Date().toISOString() } : a
     ))
 
-    await supabase.from('grant_applications').update({ stage: newStage, updated_at: new Date().toISOString() }).eq('id', appId)
-    await supabase.from('grant_activity_log').insert({
-      application_id: appId,
-      action: 'Stage changed',
-      details: `Moved to ${newStage}`,
-      performed_by: 'User',
-    })
-    fetchData()
+    await supabase.from('grant_applications').update({
+      stage: targetStage,
+      position: newPosition,
+      updated_at: new Date().toISOString(),
+    }).eq('id', appId)
+
+    if (stageChanged) {
+      await supabase.from('grant_activity_log').insert({
+        application_id: appId,
+        action: 'Stage changed',
+        details: `Moved to ${targetStage}`,
+        performed_by: 'User',
+      })
+    }
   }
 
   function handleDragStart(e: React.DragEvent, appId: string) {
     setDraggedId(appId)
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', appId)
-    // Make the drag image slightly transparent
     if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '0.5'
+      e.currentTarget.style.opacity = '0.4'
     }
   }
 
   function handleDragEnd(e: React.DragEvent) {
     setDraggedId(null)
     setDragOverStage(null)
+    setDropIndex(null)
     if (e.currentTarget instanceof HTMLElement) {
       e.currentTarget.style.opacity = '1'
     }
   }
 
-  function handleDragOver(e: React.DragEvent, stage: string) {
+  function handleColumnDragOver(e: React.DragEvent, stage: string) {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setDragOverStage(stage)
   }
 
-  function handleDragLeave(e: React.DragEvent, stage: string) {
-    // Only clear if we're actually leaving the column (not entering a child)
+  function handleColumnDragLeave(e: React.DragEvent) {
     const related = e.relatedTarget as HTMLElement | null
     const current = e.currentTarget as HTMLElement
     if (!related || !current.contains(related)) {
       setDragOverStage(null)
+      setDropIndex(null)
     }
   }
 
-  function handleDrop(e: React.DragEvent, targetStage: string) {
+  function handleColumnDrop(e: React.DragEvent, stage: string) {
     e.preventDefault()
-    setDragOverStage(null)
     const appId = e.dataTransfer.getData('text/plain')
     if (!appId) return
 
-    const app = applications.find(a => a.id === appId)
-    if (app && app.stage !== targetStage) {
-      moveToStage(appId, targetStage)
-    }
+    const cards = getCardsForStage(stage).filter(c => c.id !== appId)
+    const idx = dropIndex !== null ? dropIndex : cards.length
+    moveCard(appId, stage, idx)
+
     setDraggedId(null)
+    setDragOverStage(null)
+    setDropIndex(null)
+  }
+
+  function handleCardDragOver(e: React.DragEvent, stage: string, cardIndex: number) {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverStage(stage)
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    setDropIndex(e.clientY < midY ? cardIndex : cardIndex + 1)
   }
 
   const stages = showClosed ? [...ACTIVE_STAGES, ...CLOSED_STAGES] : ACTIVE_STAGES
-  const appsByStage = (stage: string) => applications.filter((a) => a.stage === stage)
-
-  const totalActive = ACTIVE_STAGES.reduce((sum, s) => sum + appsByStage(s).length, 0)
-  const totalClosed = CLOSED_STAGES.reduce((sum, s) => sum + appsByStage(s).length, 0)
+  const totalActive = ACTIVE_STAGES.reduce((sum, s) => sum + getCardsForStage(s).length, 0)
+  const totalClosed = CLOSED_STAGES.reduce((sum, s) => sum + getCardsForStage(s).length, 0)
 
   return (
     <AppShell>
       <div className="animate-fade-in">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="page-title">Pipeline</h1>
@@ -141,10 +179,8 @@ export default function PipelinePage() {
           </div>
         ) : applications.length === 0 ? (
           <div className="card p-16 text-center">
-            <div
-              className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-3"
-              style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.1)' }}
-            >
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-3"
+              style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.1)' }}>
               <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
               </svg>
@@ -154,63 +190,80 @@ export default function PipelinePage() {
             <Link href="/grants" className="btn-primary inline-flex">Browse Grants</Link>
           </div>
         ) : (
-          /* Kanban board */
           <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '60vh' }}>
             {stages.map((stage) => {
-              const cards = appsByStage(stage)
+              const allCards = getCardsForStage(stage)
+              const visibleCards = allCards.filter(c => c.id !== draggedId)
               const isClosed = (CLOSED_STAGES as readonly string[]).includes(stage)
               const isDropTarget = dragOverStage === stage && draggedId !== null
-              const draggedApp = draggedId ? applications.find(a => a.id === draggedId) : null
-              const isDraggedFromHere = draggedApp?.stage === stage
 
               return (
                 <div key={stage} className="flex-shrink-0" style={{ width: '280px' }}>
-                  {/* Column header */}
                   <div className="flex items-center gap-2 mb-3 px-1">
                     <span className={cn('badge text-[10px]', STAGE_COLORS[stage] || 'bg-slate-100 text-slate-500')}>
                       {stage}
                     </span>
-                    <span className="text-xs text-slate-400">{cards.length}</span>
+                    <span className="text-xs text-slate-400">{allCards.length}</span>
                   </div>
 
-                  {/* Column body (drop zone) */}
                   <div
                     className={cn(
-                      'rounded-2xl p-2 space-y-2 min-h-[200px] transition-all duration-200',
-                      isDropTarget && !isDraggedFromHere && 'ring-2 ring-blue-300 ring-opacity-60'
+                      'rounded-2xl p-2 min-h-[200px] transition-all duration-200',
+                      isDropTarget && 'ring-2 ring-blue-300 ring-opacity-60'
                     )}
                     style={{
-                      background: isDropTarget && !isDraggedFromHere
-                        ? 'rgba(59, 130, 246, 0.06)'
-                        : isClosed
-                          ? 'rgba(0, 0, 0, 0.02)'
-                          : 'rgba(255, 255, 255, 0.3)',
-                      border: isDropTarget && !isDraggedFromHere
+                      background: isDropTarget
+                        ? 'rgba(59, 130, 246, 0.04)'
+                        : isClosed ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.3)',
+                      border: isDropTarget
                         ? '1px dashed rgba(59, 130, 246, 0.3)'
                         : '1px solid rgba(255, 255, 255, 0.2)',
                     }}
-                    onDragOver={(e) => handleDragOver(e, stage)}
-                    onDragLeave={(e) => handleDragLeave(e, stage)}
-                    onDrop={(e) => handleDrop(e, stage)}
+                    onDragOver={(e) => handleColumnDragOver(e, stage)}
+                    onDragLeave={handleColumnDragLeave}
+                    onDrop={(e) => handleColumnDrop(e, stage)}
                   >
-                    {cards.map((app) => (
-                      <PipelineCard
-                        key={app.id}
-                        app={app}
-                        stages={PIPELINE_STAGES}
-                        currentStage={stage}
-                        onMove={moveToStage}
-                        isDragging={draggedId === app.id}
-                        onDragStart={(e) => handleDragStart(e, app.id)}
-                        onDragEnd={handleDragEnd}
-                      />
-                    ))}
-                    {cards.length === 0 && !isDropTarget && (
+                    <div className="space-y-0">
+                      {visibleCards.map((app, i) => {
+                        const showDropBefore = isDropTarget && dropIndex === i
+
+                        return (
+                          <div key={app.id}>
+                            {showDropBefore && (
+                              <div className="h-1 mx-1 my-1 rounded-full bg-blue-400 transition-all duration-150" />
+                            )}
+                            <div
+                              className="py-1"
+                              onDragOver={(e) => handleCardDragOver(e, stage, i)}
+                            >
+                              <PipelineCard
+                                app={app}
+                                stages={PIPELINE_STAGES}
+                                currentStage={stage}
+                                onMove={(id, newStage) => {
+                                  const targetCards = getCardsForStage(newStage)
+                                  moveCard(id, newStage, targetCards.length)
+                                }}
+                                isDragging={draggedId === app.id}
+                                onDragStart={(e) => handleDragStart(e, app.id)}
+                                onDragEnd={handleDragEnd}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                      {isDropTarget && dropIndex !== null && dropIndex >= visibleCards.length && visibleCards.length > 0 && (
+                        <div className="h-1 mx-1 my-1 rounded-full bg-blue-400 transition-all duration-150" />
+                      )}
+                    </div>
+
+                    {visibleCards.length === 0 && !isDropTarget && (
                       <div className="flex items-center justify-center py-8">
                         <p className="text-[11px] text-slate-300">No applications</p>
                       </div>
                     )}
-                    {cards.length === 0 && isDropTarget && !isDraggedFromHere && (
+                    {visibleCards.length === 0 && isDropTarget && (
                       <div className="flex items-center justify-center py-8">
                         <p className="text-[11px] text-blue-400 font-medium">Drop here</p>
                       </div>
@@ -247,7 +300,7 @@ function PipelineCard({
 
   return (
     <div
-      className={cn('relative', isDragging && 'opacity-40')}
+      className={cn('relative group', isDragging && 'opacity-40')}
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -271,20 +324,20 @@ function PipelineCard({
             ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
           }}
         >
-          {/* Drag handle indicator */}
-          <div className="absolute top-3 left-1.5 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="w-0.5 h-0.5 rounded-full bg-slate-300" />
-            <div className="w-0.5 h-0.5 rounded-full bg-slate-300" />
-            <div className="w-0.5 h-0.5 rounded-full bg-slate-300" />
+          {/* Drag handle dots */}
+          <div className="absolute top-2.5 left-1 grid grid-cols-2 gap-[2px] opacity-0 group-hover:opacity-30 transition-opacity">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="w-[3px] h-[3px] rounded-full bg-slate-500" />
+            ))}
           </div>
 
-          <p className="text-sm font-medium text-slate-800 mb-1.5 line-clamp-2">
+          <p className="text-sm font-medium text-slate-800 mb-1.5 line-clamp-2 pl-3">
             {app.grant?.name || 'Unnamed Grant'}
           </p>
           {app.grant?.category && (
-            <span className="badge bg-blue-50 text-blue-600 text-[10px] mb-2">{(app.grant.category as any).name}</span>
+            <span className="badge bg-blue-50 text-blue-600 text-[10px] mb-2 ml-3">{(app.grant.category as any).name}</span>
           )}
-          <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center justify-between mt-2 pl-3">
             {app.target_amount ? (
               <span className="text-xs font-medium text-slate-600">{formatCurrency(app.target_amount)}</span>
             ) : (
@@ -305,11 +358,10 @@ function PipelineCard({
         </div>
       </Link>
 
-      {/* Move button (still available as fallback) */}
       <div className="absolute top-2 right-2">
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu) }}
-          className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-500 hover:bg-white/60 transition-all"
+          className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-500 hover:bg-white/60 transition-all opacity-0 group-hover:opacity-100"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />

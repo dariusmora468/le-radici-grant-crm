@@ -166,6 +166,7 @@ export interface GrantApplication {
   notes: string | null
   created_at: string | null
   updated_at: string | null
+  position: number
   grant?: Grant | null
   consultant?: Consultant | null
 }
