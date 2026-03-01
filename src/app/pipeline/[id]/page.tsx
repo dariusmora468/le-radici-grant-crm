@@ -217,6 +217,27 @@ export default function ApplicationDetailPage() {
       { application_id: newApp.id, section_type: 'review', title: 'Review & Export' },
     ])
 
+    // Auto-populate Document Vault from strategy's required_documents
+    if (strategy?.required_documents && strategy.required_documents.length > 0) {
+      const statusMap: Record<string, string> = {
+        likely_ready: 'ready',
+        needs_preparation: 'not_started',
+        missing: 'not_started',
+        blocked: 'not_started',
+      }
+      const docs = strategy.required_documents.map((doc, i) => ({
+        application_id: newApp.id,
+        document_name: doc.document,
+        description: doc.description,
+        status: statusMap[doc.status] || 'not_started',
+        effort: doc.effort || null,
+        ai_can_help: doc.ai_can_help || null,
+        notes: doc.how_to_prepare || null,
+        order_index: i,
+      }))
+      await supabase.from('application_documents').insert(docs)
+    }
+
     // Update pipeline stage
     await supabase.from('grant_applications').update({
       stage: 'Preparing Application',
@@ -228,7 +249,7 @@ export default function ApplicationDetailPage() {
       application_id: app.id,
       grant_id: app.grant_id,
       action: 'Application started',
-      details: 'Started preparing grant application',
+      details: `Started preparing grant application${strategy?.required_documents ? ` with ${strategy.required_documents.length} documents tracked` : ''}`,
       performed_by: 'User',
     })
 

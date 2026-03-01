@@ -511,9 +511,11 @@ export default function ApplicationWorkspacePage() {
                   <h2 className="text-base font-semibold text-slate-800">Document Vault</h2>
                   <p className="text-sm text-slate-500 mt-0.5">Track all required documentation for this grant</p>
                 </div>
-                <span className="text-xs text-slate-400">
-                  {documents.filter(d => d.status === 'ready').length}/{documents.length} ready
-                </span>
+                {documents.length > 0 && (
+                  <span className="text-xs text-slate-400">
+                    {documents.filter(d => d.status === 'ready').length}/{documents.length} ready
+                  </span>
+                )}
               </div>
 
               {documents.length === 0 ? (
@@ -523,39 +525,88 @@ export default function ApplicationWorkspacePage() {
                   </div>
                   <h3 className="text-sm font-semibold text-slate-700 mb-1">No Documents Tracked Yet</h3>
                   <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                    Run the AI Strategy analysis first, and your required documents will appear here automatically.
+                    Run the AI Strategy analysis on your pipeline grant first. When you start an application, required documents will appear here automatically.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100">
-                      <div className={cn(
-                        'w-2.5 h-2.5 rounded-full shrink-0',
-                        doc.status === 'ready' ? 'bg-emerald-400' :
-                        doc.status === 'in_progress' ? 'bg-amber-400' : 'bg-slate-200'
-                      )} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-700 truncate">{doc.document_name}</p>
-                        {doc.description && <p className="text-xs text-slate-400 truncate">{doc.description}</p>}
+                    <details key={doc.id} className="group rounded-xl border border-slate-100 overflow-hidden">
+                      <summary className="flex items-center gap-3 p-4 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                        <div className={cn(
+                          'w-2.5 h-2.5 rounded-full shrink-0',
+                          doc.status === 'ready' ? 'bg-emerald-400' :
+                          doc.status === 'in_progress' ? 'bg-amber-400' : 'bg-slate-200'
+                        )} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-700">{doc.document_name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {doc.effort && (
+                              <span className={cn('text-[10px] font-medium',
+                                doc.effort === 'Low' ? 'text-emerald-500' :
+                                doc.effort === 'Medium' ? 'text-amber-500' : 'text-rose-500'
+                              )}>{doc.effort} effort</span>
+                            )}
+                            {doc.ai_can_help && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 font-medium">AI can help</span>
+                            )}
+                          </div>
+                        </div>
+                        <select
+                          value={doc.status}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={async (e) => {
+                            await supabase.from('application_documents').update({
+                              status: e.target.value,
+                              updated_at: new Date().toISOString(),
+                            }).eq('id', doc.id)
+                            fetchData()
+                          }}
+                          className="select-field text-xs w-28"
+                        >
+                          <option value="not_started">Not Started</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="ready">Ready</option>
+                        </select>
+                        <svg className="w-4 h-4 text-slate-300 transition-transform group-open:rotate-180 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </summary>
+                      <div className="px-4 pb-4 pt-1 ml-5.5 border-t border-slate-50">
+                        {doc.description && (
+                          <p className="text-xs text-slate-500 mb-2">{doc.description}</p>
+                        )}
+                        {doc.notes && (
+                          <div className="mb-2">
+                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">How to Prepare</p>
+                            <p className="text-xs text-slate-600">{doc.notes}</p>
+                          </div>
+                        )}
+                        {doc.ai_can_help && (
+                          <div className="p-2 rounded-lg bg-violet-50/50 border border-violet-100">
+                            <p className="text-[10px] font-semibold text-violet-600 uppercase tracking-wider mb-0.5">AI Assistance</p>
+                            <p className="text-xs text-violet-700">{doc.ai_can_help}</p>
+                          </div>
+                        )}
                       </div>
-                      <select
-                        value={doc.status}
-                        onChange={async (e) => {
-                          await supabase.from('application_documents').update({
-                            status: e.target.value,
-                            updated_at: new Date().toISOString(),
-                          }).eq('id', doc.id)
-                          fetchData()
-                        }}
-                        className="select-field text-xs w-28"
-                      >
-                        <option value="not_started">Not Started</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="ready">Ready</option>
-                      </select>
-                    </div>
+                    </details>
                   ))}
+
+                  {/* Summary bar */}
+                  <div className="flex items-center gap-4 pt-3 mt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <span className="text-[10px] text-slate-500">{documents.filter(d => d.status === 'ready').length} ready</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-amber-400" />
+                      <span className="text-[10px] text-slate-500">{documents.filter(d => d.status === 'in_progress').length} in progress</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-slate-200" />
+                      <span className="text-[10px] text-slate-500">{documents.filter(d => d.status === 'not_started').length} not started</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
