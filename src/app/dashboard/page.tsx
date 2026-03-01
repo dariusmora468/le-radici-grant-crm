@@ -8,6 +8,7 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { getRealisticTotal } from '@/lib/projections'
 import VerificationBadge from '@/components/VerificationBadge'
 import OnboardingWizard from '@/components/OnboardingWizard'
+import { computeRelevance } from '@/lib/relevance'
 import type { Grant as FullGrant } from '@/lib/supabase'
 
 type Grant = {
@@ -519,8 +520,8 @@ export default function DashboardPage() {
               <tbody className="divide-y divide-white/10">
                 {grants.map((grant) => {
                   const statusCfg = STATUS_CONFIG[grant.window_status || 'Unknown'] || STATUS_CONFIG['Unknown']
-                  const score = grant.relevance_score || 0
-                  const scoreColor = score >= 90 ? 'text-emerald-600' : score >= 70 ? 'text-blue-600' : score >= 50 ? 'text-amber-600' : 'text-slate-400'
+                  const dynamicScore = project ? computeRelevance(grant as unknown as FullGrant, project).score : (grant.relevance_score || 0)
+                  const scoreColor = dynamicScore >= 70 ? 'text-emerald-600' : dynamicScore >= 45 ? 'text-blue-600' : dynamicScore >= 25 ? 'text-amber-600' : 'text-slate-400'
 
                   return (
                     <tr key={grant.id} className={cn('hover:bg-white/20 transition-colors', grant.window_status === 'Closed' && 'opacity-40')}>
@@ -536,7 +537,7 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td className="p-3 text-center">
-                        <span className={cn('text-xs font-bold', scoreColor)}>{score}%</span>
+                        <span className={cn('text-xs font-bold', scoreColor)}>{dynamicScore}%</span>
                       </td>
                       <td className="p-3 text-center">
                         <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium bg-white/40', statusCfg.color)}>

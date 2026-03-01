@@ -9,6 +9,7 @@ import { formatCurrency, daysUntil, cn } from '@/lib/utils'
 import { getRealisticTotal } from '@/lib/projections'
 import VerificationBadge from '@/components/VerificationBadge'
 import GrantDiscovery from '@/components/GrantDiscovery'
+import { computeRelevance } from '@/lib/relevance'
 
 // Compute effective status from dates, overriding stale DB values
 function getEffectiveStatus(grant: Grant): string {
@@ -67,12 +68,18 @@ export default function GrantsPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Enrich grants with computed status
-  const enriched = grants.map(g => ({
-    ...g,
-    effectiveStatus: getEffectiveStatus(g),
-    deadlineDays: g.application_window_closes ? daysUntil(g.application_window_closes) : null,
-  }))
+  // Enrich grants with computed status and dynamic relevance
+  const enriched = grants.map(g => {
+    const relevance = project ? computeRelevance(g, project) : null
+    return {
+      ...g,
+      effectiveStatus: getEffectiveStatus(g),
+      deadlineDays: g.application_window_closes ? daysUntil(g.application_window_closes) : null,
+      dynamicScore: relevance?.score ?? g.relevance_score ?? 0,
+      scoreReasons: relevance?.reasons ?? [],
+      scoreWarnings: relevance?.warnings ?? [],
+    }
+  })
 
   // Count closed for toggle button
   const closedCount = enriched.filter(g => g.effectiveStatus === 'Closed').length
@@ -117,7 +124,7 @@ export default function GrantsPage() {
     }
 
     // Then by relevance
-    return (b.relevance_score || 0) - (a.relevance_score || 0)
+    return (b.dynamicScore || 0) - (a.dynamicScore || 0)
   })
 
   const activeCount = filtered.filter(g => g.effectiveStatus !== 'Closed').length
@@ -341,20 +348,40 @@ export default function GrantsPage() {
                               : formatCurrency(grant.max_amount || grant.min_amount)}
                           </p>
                         )}
-                        {grant.relevance_score !== null && (
-                          <div className="flex items-center gap-1 mt-1.5 justify-end">
-                            <span className="text-[10px] text-slate-400">Relevance</span>
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map((i) => (
-                                <div
-                                  key={i}
-                                  className={cn(
-                                    'w-1.5 h-1.5 rounded-full',
-                                    i <= (grant.relevance_score || 0) ? 'bg-blue-400' : 'bg-slate-200'
-                                  )}
-                                />
-                              ))}
+                        {grant.dynamicScore > 0 && (
+                          <div className="mt-1.5 text-right group relative">
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <span className="text-[10px] text-slate-400">Match</span>
+                              <span className={cn(
+                                'text-xs font-bold',
+                                grant.dynamicScore >= 70 ? 'text-emerald-600' :
+                                grant.dynamicScore >= 45 ? 'text-blue-600' :
+                                grant.dynamicScore >= 25 ? 'text-amber-600' : 'text-slate-400'
+                              )}>
+                                {grant.dynamicScore}%
+                              </span>
                             </div>
+                            {(grant.scoreReasons.length > 0 || grant.scoreWarnings.length > 0) && (
+                              <div className="hidden group-hover:block absolute right-0 top-6 z-20 w-56 p-3 rounded-xl text-left"
+                                style={{
+                                  background: 'rgba(255,255,255,0.95)',
+                                  backdropFilter: 'blur(12px)',
+                                  border: '1px solid rgba(0,0,0,0.08)',
+                                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                }}
+                              >
+                                {grant.scoreReasons.map((r, i) => (
+                                  <div key={i} className="flex items-center gap-1.5 text-[10px] text-emerald-600 mb-0.5">
+                                    <span>✓</span> {r}
+                                  </div>
+                                ))}
+                                {grant.scoreWarnings.map((w, i) => (
+                                  <div key={i} className="flex items-center gap-1.5 text-[10px] text-amber-600 mb-0.5">
+                                    <span>⚠</span> {w}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
