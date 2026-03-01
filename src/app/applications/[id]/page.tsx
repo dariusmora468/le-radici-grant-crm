@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { supabase, SECTION_LABELS, APPLICATION_STATUSES, APPLICATION_STATUS_COLORS } from '@/lib/supabase'
@@ -41,9 +41,26 @@ const SECTION_STATUS_LABELS: Record<string, string> = {
   complete: 'Complete',
 }
 
-export default function ApplicationWorkspacePage() {
+export default function ApplicationWorkspaceWrapper() {
+  return (
+    <Suspense fallback={
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    }>
+      <ApplicationWorkspacePage />
+    </Suspense>
+  )
+}
+
+function ApplicationWorkspacePage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const fromPipeline = searchParams.get('from') === 'pipeline'
+  const pipelineId = searchParams.get('pipeline_id')
   const [app, setApp] = useState<FullApplication | null>(null)
   const [sections, setSections] = useState<ApplicationSection[]>([])
   const [documents, setDocuments] = useState<ApplicationDocument[]>([])
@@ -326,7 +343,7 @@ export default function ApplicationWorkspacePage() {
       <AppShell>
         <div className="card p-16 text-center">
           <p className="text-sm text-slate-500">Application not found</p>
-          <Link href="/applications" className="btn-primary mt-4 inline-flex">Back to Applications</Link>
+          <Link href="/pipeline" className="btn-primary mt-4 inline-flex">Back to Pipeline</Link>
         </div>
       </AppShell>
     )
@@ -343,7 +360,15 @@ export default function ApplicationWorkspacePage() {
       <div className="animate-fade-in">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm mb-4">
-          <Link href="/applications" className="text-slate-400 hover:text-slate-600 transition-colors">Applications</Link>
+          <Link
+            href={fromPipeline && pipelineId ? `/pipeline/${pipelineId}` : '/pipeline'}
+            className="text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+            {fromPipeline ? 'Back to Pipeline' : 'Pipeline'}
+          </Link>
           <svg className="w-3.5 h-3.5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
           </svg>

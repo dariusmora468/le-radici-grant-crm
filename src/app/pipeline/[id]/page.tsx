@@ -266,8 +266,8 @@ export default function ApplicationDetailPage() {
       performed_by: 'User',
     })
 
-    // Navigate to the application workspace
-    router.push(`/applications/${newApp.id}`)
+    // Navigate to the application workspace (embedded view)
+    router.push(`/applications/${newApp.id}?from=pipeline&pipeline_id=${app.id}`)
   }
 
   async function askQuestion(q?: string) {
@@ -436,7 +436,7 @@ export default function ApplicationDetailPage() {
             })()}
           </div>
         ) : (
-          <Link href={`/applications/${applicationId}`} className="block mb-4">
+          <Link href={`/applications/${applicationId}?from=pipeline&pipeline_id=${app.id}`} className="block mb-4">
             <div className="p-4 rounded-2xl transition-all duration-200 group" style={{
               background: 'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(59,130,246,0.06) 100%)',
               border: '1px solid rgba(16,185,129,0.15)',
