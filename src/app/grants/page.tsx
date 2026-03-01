@@ -58,7 +58,7 @@ export default function GrantsPage() {
 
   const totalPotentialValue = grants.reduce((sum, g) => sum + (g.max_amount || 0), 0)
   const openGrants = grants.filter((g) => g.window_status === 'Open' || g.window_status === 'Rolling').length
-  const highRelevance = grants.filter((g) => (g.relevance_score || 0) >= 4).length
+  const highRelevance = grants.filter((g) => (g.relevance_score || 0) >= 70).length
 
   const filtered = grants.filter((g) => {
     if (search) {
@@ -216,14 +216,21 @@ export default function GrantsPage() {
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.04)' }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.55)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
               >
-                {/* Relevance indicator */}
+                {/* Match score */}
                 <div className={cn(
-                  'w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0',
-                  (grant.relevance_score || 0) >= 4 ? 'bg-blue-50 text-blue-600' :
-                  (grant.relevance_score || 0) >= 3 ? 'bg-slate-100 text-slate-600' :
-                  'bg-slate-50 text-slate-400'
+                  'w-11 h-11 rounded-xl flex items-center justify-center shrink-0 relative',
+                  (grant.relevance_score || 0) >= 70 ? 'bg-emerald-50' :
+                  (grant.relevance_score || 0) >= 50 ? 'bg-blue-50' :
+                  (grant.relevance_score || 0) > 0 ? 'bg-slate-50' : 'bg-slate-50'
                 )}>
-                  {grant.relevance_score || '?'}
+                  <span className={cn(
+                    'text-xs font-bold',
+                    (grant.relevance_score || 0) >= 70 ? 'text-emerald-600' :
+                    (grant.relevance_score || 0) >= 50 ? 'text-blue-600' :
+                    (grant.relevance_score || 0) > 0 ? 'text-slate-500' : 'text-slate-300'
+                  )}>
+                    {grant.relevance_score ? `${grant.relevance_score}%` : '?'}
+                  </span>
                 </div>
 
                 {/* Name + badges */}

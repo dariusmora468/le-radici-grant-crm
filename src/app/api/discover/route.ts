@@ -52,7 +52,7 @@ Each object in the array must have exactly these fields:
   "window_status": "Open" | "Closing soon" | "Rolling" | "Not yet open" | "Unknown",
   "official_url": "URL to official program page" or null,
   "regulation_reference": "Legal reference" or null,
-  "relevance_score": 1-5 (5 = highly relevant),
+  "relevance_score": 0-100 (percentage match to the project profile. 90-100 = near-perfect fit, 70-89 = strong fit, 50-69 = moderate fit, 30-49 = weak fit, below 30 = poor fit),
   "effort_level": "Low" | "Medium" | "High" | "Very High",
   "requires_young_farmer": boolean,
   "requires_agricultural_entity": boolean,
@@ -60,7 +60,7 @@ Each object in the array must have exactly these fields:
   "notes": "Any important notes about this specific opportunity for this project" or null
 }
 
-Find at least 15 grants. Be thorough. Include both obvious and less-known opportunities. Sort by relevance_score descending.`
+Find at least 15 grants. Be thorough. Include both obvious and less-known opportunities. Sort by relevance_score descending (highest match first).`
 
     const userPrompt = `Find all available grants and funding for this project:
 

@@ -256,17 +256,29 @@ export default function GrantDetailPage() {
               </div>
             </div>
 
-            {/* Relevance */}
+            {/* Match Score */}
             {grant.relevance_score !== null && (
               <div className="card p-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1.5">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className={cn('w-4 h-4 rounded-full', i <= (grant.relevance_score || 0) ? 'bg-blue-400' : 'bg-slate-200')} />
-                    ))}
-                  </div>
-                  <span className="text-lg font-semibold text-slate-700">{grant.relevance_score}/5</span>
-                  <span className="text-xs text-slate-400">relevance</span>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Match Score</p>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className={cn(
+                    'text-2xl font-bold',
+                    (grant.relevance_score || 0) >= 70 ? 'text-emerald-600' :
+                    (grant.relevance_score || 0) >= 50 ? 'text-blue-600' : 'text-slate-500'
+                  )}>
+                    {grant.relevance_score}%
+                  </span>
+                  <span className="text-xs text-slate-400">match</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      (grant.relevance_score || 0) >= 70 ? 'bg-emerald-400' :
+                      (grant.relevance_score || 0) >= 50 ? 'bg-blue-400' : 'bg-slate-300'
+                    )}
+                    style={{ width: `${grant.relevance_score || 0}%` }}
+                  />
                 </div>
               </div>
             )}
