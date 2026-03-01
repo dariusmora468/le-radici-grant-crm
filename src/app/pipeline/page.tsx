@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { supabase, PIPELINE_STAGES, STAGE_COLORS } from '@/lib/supabase'
@@ -24,6 +24,8 @@ export default function PipelinePage() {
   const [applications, setApplications] = useState<AppWithGrant[]>([])
   const [loading, setLoading] = useState(true)
   const [showClosed, setShowClosed] = useState(false)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -38,8 +40,12 @@ export default function PipelinePage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   async function moveToStage(appId: string, newStage: string) {
+    // Optimistic update for instant feel
+    setApplications(prev => prev.map(a =>
+      a.id === appId ? { ...a, stage: newStage, updated_at: new Date().toISOString() } : a
+    ))
+
     await supabase.from('grant_applications').update({ stage: newStage, updated_at: new Date().toISOString() }).eq('id', appId)
-    // Log activity
     await supabase.from('grant_activity_log').insert({
       application_id: appId,
       action: 'Stage changed',
@@ -47,6 +53,52 @@ export default function PipelinePage() {
       performed_by: 'User',
     })
     fetchData()
+  }
+
+  function handleDragStart(e: React.DragEvent, appId: string) {
+    setDraggedId(appId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', appId)
+    // Make the drag image slightly transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5'
+    }
+  }
+
+  function handleDragEnd(e: React.DragEvent) {
+    setDraggedId(null)
+    setDragOverStage(null)
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1'
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent, stage: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverStage(stage)
+  }
+
+  function handleDragLeave(e: React.DragEvent, stage: string) {
+    // Only clear if we're actually leaving the column (not entering a child)
+    const related = e.relatedTarget as HTMLElement | null
+    const current = e.currentTarget as HTMLElement
+    if (!related || !current.contains(related)) {
+      setDragOverStage(null)
+    }
+  }
+
+  function handleDrop(e: React.DragEvent, targetStage: string) {
+    e.preventDefault()
+    setDragOverStage(null)
+    const appId = e.dataTransfer.getData('text/plain')
+    if (!appId) return
+
+    const app = applications.find(a => a.id === appId)
+    if (app && app.stage !== targetStage) {
+      moveToStage(appId, targetStage)
+    }
+    setDraggedId(null)
   }
 
   const stages = showClosed ? [...ACTIVE_STAGES, ...CLOSED_STAGES] : ACTIVE_STAGES
@@ -107,6 +159,10 @@ export default function PipelinePage() {
             {stages.map((stage) => {
               const cards = appsByStage(stage)
               const isClosed = (CLOSED_STAGES as readonly string[]).includes(stage)
+              const isDropTarget = dragOverStage === stage && draggedId !== null
+              const draggedApp = draggedId ? applications.find(a => a.id === draggedId) : null
+              const isDraggedFromHere = draggedApp?.stage === stage
+
               return (
                 <div key={stage} className="flex-shrink-0" style={{ width: '280px' }}>
                   {/* Column header */}
@@ -117,13 +173,25 @@ export default function PipelinePage() {
                     <span className="text-xs text-slate-400">{cards.length}</span>
                   </div>
 
-                  {/* Column body */}
+                  {/* Column body (drop zone) */}
                   <div
-                    className="rounded-2xl p-2 space-y-2 min-h-[200px]"
+                    className={cn(
+                      'rounded-2xl p-2 space-y-2 min-h-[200px] transition-all duration-200',
+                      isDropTarget && !isDraggedFromHere && 'ring-2 ring-blue-300 ring-opacity-60'
+                    )}
                     style={{
-                      background: isClosed ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.3)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      background: isDropTarget && !isDraggedFromHere
+                        ? 'rgba(59, 130, 246, 0.06)'
+                        : isClosed
+                          ? 'rgba(0, 0, 0, 0.02)'
+                          : 'rgba(255, 255, 255, 0.3)',
+                      border: isDropTarget && !isDraggedFromHere
+                        ? '1px dashed rgba(59, 130, 246, 0.3)'
+                        : '1px solid rgba(255, 255, 255, 0.2)',
                     }}
+                    onDragOver={(e) => handleDragOver(e, stage)}
+                    onDragLeave={(e) => handleDragLeave(e, stage)}
+                    onDrop={(e) => handleDrop(e, stage)}
                   >
                     {cards.map((app) => (
                       <PipelineCard
@@ -132,11 +200,19 @@ export default function PipelinePage() {
                         stages={PIPELINE_STAGES}
                         currentStage={stage}
                         onMove={moveToStage}
+                        isDragging={draggedId === app.id}
+                        onDragStart={(e) => handleDragStart(e, app.id)}
+                        onDragEnd={handleDragEnd}
                       />
                     ))}
-                    {cards.length === 0 && (
+                    {cards.length === 0 && !isDropTarget && (
                       <div className="flex items-center justify-center py-8">
                         <p className="text-[11px] text-slate-300">No applications</p>
+                      </div>
+                    )}
+                    {cards.length === 0 && isDropTarget && !isDraggedFromHere && (
+                      <div className="flex items-center justify-center py-8">
+                        <p className="text-[11px] text-blue-400 font-medium">Drop here</p>
                       </div>
                     )}
                   </div>
@@ -155,20 +231,30 @@ function PipelineCard({
   stages,
   currentStage,
   onMove,
+  isDragging,
+  onDragStart,
+  onDragEnd,
 }: {
   app: AppWithGrant
   stages: readonly string[]
   currentStage: string
   onMove: (id: string, stage: string) => void
+  isDragging: boolean
+  onDragStart: (e: React.DragEvent) => void
+  onDragEnd: (e: React.DragEvent) => void
 }) {
   const [showMenu, setShowMenu] = useState(false)
-  const currentIndex = stages.indexOf(currentStage as any)
 
   return (
-    <div className="relative">
+    <div
+      className={cn('relative', isDragging && 'opacity-40')}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       <Link href={`/pipeline/${app.id}`}>
         <div
-          className="p-3.5 rounded-xl transition-all duration-200 cursor-pointer"
+          className="p-3.5 rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing"
           style={{
             background: 'rgba(255, 255, 255, 0.72)',
             backdropFilter: 'blur(12px)',
@@ -185,11 +271,18 @@ function PipelineCard({
             ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
           }}
         >
+          {/* Drag handle indicator */}
+          <div className="absolute top-3 left-1.5 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-0.5 h-0.5 rounded-full bg-slate-300" />
+            <div className="w-0.5 h-0.5 rounded-full bg-slate-300" />
+            <div className="w-0.5 h-0.5 rounded-full bg-slate-300" />
+          </div>
+
           <p className="text-sm font-medium text-slate-800 mb-1.5 line-clamp-2">
             {app.grant?.name || 'Unnamed Grant'}
           </p>
           {app.grant?.category && (
-            <span className="badge bg-blue-50 text-blue-600 text-[10px] mb-2">{app.grant.category.name}</span>
+            <span className="badge bg-blue-50 text-blue-600 text-[10px] mb-2">{(app.grant.category as any).name}</span>
           )}
           <div className="flex items-center justify-between mt-2">
             {app.target_amount ? (
@@ -212,7 +305,7 @@ function PipelineCard({
         </div>
       </Link>
 
-      {/* Move button */}
+      {/* Move button (still available as fallback) */}
       <div className="absolute top-2 right-2">
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu) }}
