@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell'
 import { supabase, STAGE_COLORS } from '@/lib/supabase'
 import type { Grant, GrantApplication, Project, Consultant } from '@/lib/supabase'
 import { formatCurrency, formatDate, daysUntil, cn } from '@/lib/utils'
+import { getGrantProjection, getProbabilityDisplay } from '@/lib/projections'
 
 interface FoundConsultant {
   name: string
@@ -282,6 +283,41 @@ export default function GrantDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Realistic Projection */}
+            {(grant.max_amount || grant.min_amount) && (() => {
+              const projection = getGrantProjection(grant)
+              const display = getProbabilityDisplay(projection.combinedProbability)
+              return (
+                <div className="card p-6">
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Realistic Projection</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={cn('text-xs font-bold px-2.5 py-1 rounded-lg', display.bgColor, display.color)}>
+                      {display.percentage}% probability
+                    </span>
+                    <span className={cn('text-xs font-medium', display.color)}>{display.label}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Expected value</span>
+                      <span className="text-sm font-bold text-emerald-600">{formatCurrency(projection.expectedValue)}</span>
+                    </div>
+                    {projection.expectedMin > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-400">Expected min</span>
+                        <span className="text-sm font-medium text-slate-600">{formatCurrency(projection.expectedMin)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>Relevance: {projection.probability * 100}%</span>
+                      <span>Status: x{projection.statusMultiplier}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </div>
 

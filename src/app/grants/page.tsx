@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell'
 import { supabase, FUNDING_SOURCES, FUNDING_TYPES } from '@/lib/supabase'
 import type { Grant, GrantCategory } from '@/lib/supabase'
 import { formatCurrency, daysUntil, cn } from '@/lib/utils'
+import { getRealisticTotal } from '@/lib/projections'
 
 // Compute effective status from dates, overriding stale DB values
 function getEffectiveStatus(grant: Grant): string {
@@ -175,6 +176,34 @@ export default function GrantsPage() {
             )}
           </div>
         </div>
+
+        {/* Funding Summary */}
+        {!loading && filtered.length > 0 && (() => {
+          const summary = getRealisticTotal(filtered as Grant[])
+          return (
+            <div className="glass-solid rounded-2xl p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-8">
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Potential</div>
+                    <div className="text-xl font-bold text-slate-700 mt-0.5">{formatCurrency(summary.totalAddressable)}</div>
+                  </div>
+                  <div className="w-px h-10 bg-slate-200/60" />
+                  <div>
+                    <div className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider">Realistic Projection</div>
+                    <div className="text-xl font-bold text-emerald-600 mt-0.5">{formatCurrency(summary.realisticTotal)}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-right">
+                  <div>
+                    <div className="text-lg font-bold text-blue-600">{summary.highProbabilityCount}</div>
+                    <div className="text-[10px] text-slate-400">High probability</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Grants list */}
         {loading ? (

@@ -5,12 +5,15 @@ import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { supabase } from '@/lib/supabase'
 import { cn, formatCurrency } from '@/lib/utils'
+import { getRealisticTotal } from '@/lib/projections'
+import type { Grant as FullGrant } from '@/lib/supabase'
 
 type Grant = {
   id: string
   name: string
   name_it: string | null
   funding_source: string
+  min_amount: number | null
   max_amount: number | null
   relevance_score: number | null
   window_status: string | null
@@ -189,25 +192,48 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Total Addressable Funding Banner */}
-        <div className="glass-solid rounded-2xl p-5 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Addressable Funding</div>
-              <div className="text-3xl font-bold text-slate-900 mt-1">
-                {formatCurrency(totalAddressable)}+
-              </div>
-              <div className="text-xs text-slate-500 mt-1">
-                Across {grants.filter(g => g.window_status !== 'Closed').length} active grants (excludes closed windows and uncapped programs)
+        {/* Funding Projection Banner */}
+        {(() => {
+          const summary = getRealisticTotal(grants as unknown as FullGrant[])
+          return (
+            <div className="glass-solid rounded-2xl p-5 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-8">
+                  <div>
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Addressable</div>
+                    <div className="text-2xl font-bold text-slate-700 mt-1">
+                      {formatCurrency(summary.totalAddressable)}+
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      Across {summary.activeGrantCount} active grants
+                    </div>
+                  </div>
+                  <div className="w-px h-14 bg-slate-200/60" />
+                  <div>
+                    <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Realistic Projection</div>
+                    <div className="text-2xl font-bold text-emerald-600 mt-1">
+                      {formatCurrency(summary.realisticTotal)}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      Weighted by relevance + status
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6 text-right">
+                  <div>
+                    <div className="text-lg font-bold text-blue-600">{summary.highProbabilityCount}</div>
+                    <div className="text-[10px] text-slate-400">High probability</div>
+                  </div>
+                  <div className="w-px h-10 bg-slate-200/40" />
+                  <div>
+                    <div className="text-lg font-bold text-blue-600">{pipeline.length}</div>
+                    <div className="text-[10px] text-slate-400">In pipeline</div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-slate-500">In Pipeline</div>
-              <div className="text-2xl font-bold text-blue-600">{pipeline.length}</div>
-              <div className="text-xs text-slate-400">applications</div>
-            </div>
-          </div>
-        </div>
+          )
+        })()}
 
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           {/* ============= SECTION 2: BLOCKER TRACKER ============= */}
