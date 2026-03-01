@@ -237,3 +237,18 @@ export interface Project {
   created_at?: string | null
   updated_at?: string | null
 }
+
+export interface Strategy {
+  id: string
+  project_id: string
+  executive_summary: string | null
+  grants_ranked: any[]
+  blockers: any[]
+  action_plan: any[]
+  total_potential_value: number
+  total_grants_analyzed: number
+  high_probability_count: number
+  generated_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
