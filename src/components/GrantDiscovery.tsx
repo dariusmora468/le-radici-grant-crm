@@ -58,6 +58,8 @@ export default function GrantDiscovery({
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set())
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set())
   const [savingAll, setSavingAll] = useState(false)
+  const [filteredNoUrl, setFilteredNoUrl] = useState(0)
+  const [urlErrors, setUrlErrors] = useState<Record<number, string>>({})
 
   async function handleDiscover() {
     setDiscovering(true)
@@ -76,7 +78,11 @@ export default function GrantDiscovery({
       }
 
       const data = await res.json()
-      setResults(data.grants || [])
+      const allGrants: DiscoveredGrant[] = data.grants || []
+      // Only surface grants that have an official URL — no URL = not a real result
+      const withUrl = allGrants.filter(g => g.official_url && g.official_url.trim() !== '')
+      setFilteredNoUrl(allGrants.length - withUrl.length)
+      setResults(withUrl)
       setSummary(data.search_summary || '')
     } catch (err: any) {
       setError(err.message)
@@ -89,6 +95,22 @@ export default function GrantDiscovery({
     setSavingIds(prev => new Set(prev).add(index))
 
     try {
+      // Validate URL is live before saving
+      if (!grant.official_url) {
+        setUrlErrors(prev => ({ ...prev, [index]: 'No official URL — cannot save' }))
+        return
+      }
+      const urlCheck = await apiFetch('/api/check-url', {
+        method: 'POST',
+        body: JSON.stringify({ url: grant.official_url }),
+      })
+      const urlData = await urlCheck.json().catch(() => ({ valid: false }))
+      if (!urlData.valid) {
+        setUrlErrors(prev => ({ ...prev, [index]: `URL is not reachable (${urlData.status || urlData.reason || 'dead link'})` }))
+        return
+      }
+      setUrlErrors(prev => { const next = { ...prev }; delete next[index]; return next })
+
       const categoryId = CATEGORY_MAP[grant.category] || null
       const { error } = await supabase.from('grants').insert({
         name: grant.name,
@@ -202,8 +224,13 @@ export default function GrantDiscovery({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-slate-800">
-              Found {results?.length || 0} matching grants
+              Found {results?.length || 0} grants with verified links
             </h3>
+            {filteredNoUrl > 0 && (
+              <p className="text-xs text-amber-600 mt-0.5">
+                {filteredNoUrl} result{filteredNoUrl > 1 ? 's' : ''} hidden — no official URL provided by AI
+              </p>
+            )}
             {summary && <p className="text-xs text-slate-500 mt-0.5">{summary}</p>}
           </div>
           <div className="flex items-center gap-3">
@@ -333,6 +360,9 @@ export default function GrantDiscovery({
                   >
                     Official page →
                   </a>
+                )}
+                {urlErrors[i] && (
+                  <p className="text-[10px] text-rose-600 mt-1 max-w-[140px] text-right">{urlErrors[i]}</p>
                 )}
               </div>
             </div>
