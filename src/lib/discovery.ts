@@ -102,8 +102,38 @@ export async function discoverGrants(
     // Phase: Saving to Supabase
     onPhase(getPhaseInfo('saving'))
 
+    // Phase: Validating URLs — check every discovered grant has a working link
+    onPhase({ phase: 'saving', message: 'Validating grant URLs...', pct: 90 })
+
+    // Drop grants with no URL immediately
+    const grantsWithUrls = grants.filter(g => g.official_url && g.official_url.trim() !== '')
+    const skippedNoUrl = grants.length - grantsWithUrls.length
+
+    // Check each URL in parallel (server-side, no CORS issues)
+    const urlCheckResults = await Promise.all(
+      grantsWithUrls.map(async (grant) => {
+        try {
+          const res = await fetch('/api/check-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: grant.official_url }),
+          })
+          const data = await res.json()
+          return { grant, valid: data.valid === true }
+        } catch {
+          return { grant, valid: false }
+        }
+      })
+    )
+
+    const validatedGrants = urlCheckResults.filter(r => r.valid).map(r => r.grant)
+    const skippedDeadUrl = urlCheckResults.filter(r => !r.valid).length
+
+    // Phase: Saving to Supabase — only verified grants
+    onPhase(getPhaseInfo('saving'))
+
     let savedCount = 0
-    for (const grant of grants) {
+    for (const grant of validatedGrants) {
       // Check for duplicates by name
       const { data: existing } = await supabase
         .from('grants')
@@ -144,7 +174,13 @@ export async function discoverGrants(
     // Phase: Complete
     onPhase(getPhaseInfo('complete'))
 
-    return { grants, saved: savedCount }
+    return {
+      grants: validatedGrants,
+      saved: savedCount,
+      skipped: skippedNoUrl + skippedDeadUrl,
+      skippedNoUrl,
+      skippedDeadUrl,
+    }
   } catch (err: any) {
     onPhase({ phase: 'error', message: err.message || 'Discovery failed', pct: 0 })
     return { grants: [], saved: 0, error: err.message }

@@ -53,7 +53,7 @@ Each object in the array must have exactly these fields:
   "application_window_opens": "YYYY-MM-DD" or null,
   "application_window_closes": "YYYY-MM-DD" or null,
   "window_status": "Open" | "Closing soon" | "Rolling" | "Not yet open" | "Unknown",
-  "official_url": "URL to official program page" or null,
+  "official_url": "REQUIRED: direct URL to the specific program page (not a homepage). Omit the entire grant if you cannot provide a real, working URL.",
   "regulation_reference": "Legal reference" or null,
   "relevance_score": 0-100 (percentage match to the project profile. 90-100 = near-perfect fit, 70-89 = strong fit, 50-69 = moderate fit, 30-49 = weak fit, below 30 = poor fit),
   "effort_level": "Low" | "Medium" | "High" | "Very High",

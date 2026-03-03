@@ -92,7 +92,7 @@ RULES:
 - If a program is closed but expected to reopen, include it with status "Expected soon".
 - Do NOT include programs that are clearly not a fit.
 - Be specific in why_relevant -- reference actual project attributes.
-- Include the official URL when you know it.`
+- MANDATORY: official_url must be a real, working URL to the program's official page. If you cannot provide a verified URL for a grant, omit that grant entirely. Do not include null URLs or homepage-only links.`
 
     const existingNames = existingGrantNames?.length
       ? `\n\nGrants already in the user's database (do NOT repeat these, find NEW ones):\n${existingGrantNames.map((n: string) => `- ${n}`).join('\n')}`
