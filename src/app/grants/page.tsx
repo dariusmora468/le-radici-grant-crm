@@ -290,6 +290,12 @@ export default function GrantsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2.5 mb-1.5">
                           <h3 className="text-sm font-semibold text-slate-800 truncate">{grant.name}</h3>
+                          {!grant.official_url && (
+                            <span title="No official URL — open grant to add one" className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-200">
+                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                              No URL
+                            </span>
+                          )}
                           {inPipeline && (
                             <span className="badge bg-blue-100 text-blue-700 shrink-0 text-[10px] font-semibold">
                               📋 {pipelineStage}

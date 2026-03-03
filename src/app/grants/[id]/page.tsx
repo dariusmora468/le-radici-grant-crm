@@ -65,6 +65,18 @@ export default function GrantDetailPage() {
   const [verifying, setVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<any>(null)
 
+  // Edit panel
+  const [isEditing, setIsEditing] = useState(false)
+  const [editUrl, setEditUrl] = useState('')
+  const [editDocUrl, setEditDocUrl] = useState('')
+  const [editCallText, setEditCallText] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  // Call text analysis
+  const [analyzingCallText, setAnalyzingCallText] = useState(false)
+  const [callTextError, setCallTextError] = useState<string | null>(null)
+
   const fetchData = useCallback(async () => {
     const id = params.id as string
     const [grantRes, appsRes, projRes] = await Promise.all([
@@ -84,6 +96,16 @@ export default function GrantDetailPage() {
   }, [params.id])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Sync edit fields when grant loads
+  useEffect(() => {
+    if (grant) {
+      setEditUrl(grant.official_url || '')
+      setEditDocUrl(grant.documentation_url || '')
+      setEditCallText(grant.call_text || '')
+      setEditNotes(grant.notes || '')
+    }
+  }, [grant?.id])
 
   async function runAnalysis(g: Grant, p: Project) {
     setAnalyzing(true)
@@ -323,6 +345,49 @@ export default function GrantDetailPage() {
     setVerifying(false)
   }
 
+  async function handleSaveEdits() {
+    if (!grant) return
+    setSavingEdit(true)
+    const callTextChanged = editCallText !== (grant.call_text || '')
+    await supabase.from('grants').update({
+      official_url: editUrl || null,
+      documentation_url: editDocUrl || null,
+      call_text: editCallText || null,
+      notes: editNotes || null,
+    }).eq('id', grant.id)
+    setGrant((prev) => prev ? {
+      ...prev,
+      official_url: editUrl || null,
+      documentation_url: editDocUrl || null,
+      call_text: editCallText || null,
+      notes: editNotes || null,
+    } : null)
+    setSavingEdit(false)
+    setIsEditing(false)
+    // Auto-analyze if call text was updated
+    if (callTextChanged && editCallText) {
+      handleAnalyzeCallText(editCallText, grant.id)
+    }
+  }
+
+  async function handleAnalyzeCallText(text: string, grantId: string) {
+    setAnalyzingCallText(true)
+    setCallTextError(null)
+    try {
+      const res = await apiFetch('/api/analyze-call-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant_id: grantId, call_text: text }),
+      })
+      if (!res.ok) throw new Error('Analysis failed')
+      const data = await res.json()
+      setGrant((prev) => prev ? { ...prev, scoring_criteria: data.scoring_criteria } : null)
+    } catch (err: any) {
+      setCallTextError(err.message || 'Analysis failed')
+    }
+    setAnalyzingCallText(false)
+  }
+
   if (loading) return <AppShell><div className="flex items-center justify-center py-20"><div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div></AppShell>
   if (!grant) return <AppShell><div className="card p-16 text-center"><p className="text-sm text-slate-500">Grant not found</p><Link href="/grants" className="btn-primary mt-4 inline-flex">Back to grants</Link></div></AppShell>
 
@@ -332,6 +397,14 @@ export default function GrantDetailPage() {
   return (
     <AppShell>
       <div className="animate-fade-in">
+        {/* URL Warning Banner */}
+        {!grant.official_url && (
+          <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+            <p className="text-sm font-medium">No official URL for this grant. Click <button onClick={() => setIsEditing(true)} className="underline font-semibold hover:text-amber-900">Edit Grant</button> to add the source link.</p>
+          </div>
+        )}
+
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm mb-6">
           <Link href="/grants" className="text-slate-400 hover:text-slate-600 transition-colors">Grants</Link>
@@ -390,7 +463,84 @@ export default function GrantDetailPage() {
                 Official Page
               </a>
             )}
+            <button
+              onClick={() => setIsEditing((v) => !v)}
+              className="ml-auto btn-ghost text-sm text-slate-400 hover:text-slate-600"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" /></svg>
+              {isEditing ? 'Cancel' : 'Edit Grant'}
+            </button>
           </div>
+
+          {/* Edit Panel */}
+          {isEditing && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Edit Grant Details</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Official URL</label>
+                  <input
+                    type="url"
+                    value={editUrl}
+                    onChange={(e) => setEditUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="input-field w-full text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Documentation URL (optional)</label>
+                  <input
+                    type="url"
+                    value={editDocUrl}
+                    onChange={(e) => setEditDocUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="input-field w-full text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Call for Proposals Text
+                    <span className="ml-2 text-blue-500 font-medium">Paste this to unlock AI scoring analysis</span>
+                  </label>
+                  <textarea
+                    value={editCallText}
+                    onChange={(e) => setEditCallText(e.target.value)}
+                    placeholder="Paste the full text of the official call for proposals here. The more complete, the better the scoring analysis."
+                    rows={8}
+                    className="input-field w-full text-sm resize-y"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Internal Notes</label>
+                  <textarea
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="Internal notes about this grant..."
+                    rows={2}
+                    className="input-field w-full text-sm resize-y"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={handleSaveEdits}
+                    disabled={savingEdit}
+                    className="btn-primary text-sm disabled:opacity-60"
+                  >
+                    {savingEdit ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="btn-ghost text-sm text-slate-400"
+                  >
+                    Cancel
+                  </button>
+                  {editCallText && (
+                    <span className="text-xs text-slate-400 ml-2">Scoring analysis will run automatically after saving</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Description + Who is it for */}
@@ -416,6 +566,121 @@ export default function GrantDetailPage() {
                 <p className="text-sm text-slate-600 leading-relaxed">{grant.eligibility_summary}</p>
               </div>
             )}
+
+            {/* Possible Scoring Criteria */}
+            <div className="card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
+                  <h2 className="text-sm font-semibold text-slate-800">Possible Scoring Criteria</h2>
+                </div>
+                {grant.call_text && !grant.scoring_criteria && !analyzingCallText && (
+                  <button
+                    onClick={() => grant && handleAnalyzeCallText(grant.call_text!, grant.id)}
+                    className="text-xs text-violet-600 hover:text-violet-700 font-medium"
+                  >
+                    Run Analysis
+                  </button>
+                )}
+                {grant.scoring_criteria && (
+                  <button
+                    onClick={() => grant && grant.call_text && handleAnalyzeCallText(grant.call_text, grant.id)}
+                    disabled={analyzingCallText}
+                    className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                  >
+                    Re-analyze
+                  </button>
+                )}
+              </div>
+
+              {analyzingCallText ? (
+                <div className="flex items-center gap-3 py-6">
+                  <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm text-slate-500">Extracting scoring criteria from the call text...</span>
+                </div>
+              ) : callTextError ? (
+                <p className="text-xs text-rose-500">{callTextError}</p>
+              ) : grant.scoring_criteria ? (
+                <div className="space-y-5">
+                  {/* Keywords */}
+                  {grant.scoring_criteria.keywords?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Use These Keywords</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {grant.scoring_criteria.keywords.map((kw: string, i: number) => (
+                          <button
+                            key={i}
+                            onClick={() => navigator.clipboard.writeText(kw)}
+                            title="Click to copy"
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors cursor-pointer"
+                          >
+                            {kw}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Click any keyword to copy</p>
+                    </div>
+                  )}
+
+                  {/* Scoring Criteria */}
+                  {grant.scoring_criteria.scoring_criteria?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">How They Score Applications</p>
+                      <div className="space-y-2">
+                        {grant.scoring_criteria.scoring_criteria.map((sc: any, i: number) => (
+                          <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-slate-50/60">
+                            <span className={cn(
+                              'shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5',
+                              sc.weight === 'High' ? 'bg-rose-100 text-rose-600' :
+                              sc.weight === 'Medium' ? 'bg-amber-100 text-amber-600' :
+                              'bg-slate-100 text-slate-500'
+                            )}>{sc.weight}</span>
+                            <div>
+                              <p className="text-xs font-semibold text-slate-700">{sc.criterion}</p>
+                              {sc.notes && <p className="text-xs text-slate-500 mt-0.5">{sc.notes}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* What they want */}
+                  {grant.scoring_criteria.what_they_want && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">What They Really Want</p>
+                      <p className="text-sm text-slate-600 leading-relaxed">{grant.scoring_criteria.what_they_want}</p>
+                    </div>
+                  )}
+
+                  {/* Red flags */}
+                  {grant.scoring_criteria.red_flags?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-rose-500 uppercase tracking-wider mb-2">Common Disqualifiers</p>
+                      <div className="space-y-1">
+                        {grant.scoring_criteria.red_flags.map((flag: string, i: number) => (
+                          <div key={i} className="flex items-start gap-2 text-sm text-rose-600">
+                            <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                            <span>{flag}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-slate-200 hover:border-violet-300 hover:bg-violet-50/30 transition-all group"
+                >
+                  <svg className="w-6 h-6 text-slate-300 group-hover:text-violet-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-slate-500 group-hover:text-violet-600 transition-colors">Paste the call for proposals to unlock</p>
+                    <p className="text-xs text-slate-400 mt-0.5">AI will extract keywords, scoring criteria, and red flags</p>
+                  </div>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-4">

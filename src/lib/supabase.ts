@@ -140,6 +140,9 @@ export interface Grant {
   verification_confidence: number | null
   last_verified_at: string | null
   verification_details: Record<string, any> | null
+  // Intelligence fields
+  call_text: string | null
+  scoring_criteria: Record<string, any> | null
 }
 
 export interface GrantCategory {
